@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Home Deal Finder - {{ run_date }}</title>
+<style>
+  body { margin: 0; padding: 0; background: #f4f4f4; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .container { max-width: 700px; margin: 0 auto; background: #ffffff; }
+  .header { background: #1a365d; color: white; padding: 24px 32px; }
+  .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
+  .header p { margin: 8px 0 0; opacity: 0.85; font-size: 14px; }
+  .summary { background: #ebf4ff; padding: 16px 32px; border-bottom: 1px solid #d0e3f7; }
+  .summary-stats { display: flex; gap: 24px; flex-wrap: wrap; }
+  .stat { text-align: center; }
+  .stat-value { font-size: 28px; font-weight: 700; color: #1a365d; }
+  .stat-label { font-size: 12px; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px; }
+  .section { padding: 24px 32px; }
+  .section-title { font-size: 20px; font-weight: 600; color: #1a365d; margin: 0 0 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0; }
+  .listing-card { border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
+  .listing-card:hover { border-color: #a0aec0; }
+  .card-body { padding: 16px; }
+  .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+  .card-address { font-size: 16px; font-weight: 600; color: #2d3748; margin: 0; }
+  .card-location { font-size: 13px; color: #718096; margin: 2px 0 0; }
+  .deal-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 14px; font-weight: 700; color: white; white-space: nowrap; }
+  .deal-great { background: #38a169; }
+  .deal-good { background: #d69e2e; }
+  .deal-fair { background: #e53e3e; }
+  .card-details { display: flex; gap: 16px; flex-wrap: wrap; margin: 12px 0; }
+  .detail { font-size: 14px; color: #4a5568; }
+  .detail-value { font-weight: 600; color: #2d3748; }
+  .card-price { font-size: 22px; font-weight: 700; color: #2d3748; }
+  .highlights { margin: 12px 0 0; }
+  .highlight { display: inline-block; background: #ebf4ff; color: #2b6cb0; padding: 3px 8px; border-radius: 4px; font-size: 12px; margin: 2px 4px 2px 0; }
+  .highlight-good { background: #f0fff4; color: #276749; }
+  .highlight-warn { background: #fffaf0; color: #c05621; }
+  .card-links { margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0; }
+  .card-links a { font-size: 13px; color: #3182ce; text-decoration: none; margin-right: 16px; }
+  .card-links a:hover { text-decoration: underline; }
+  .score-bars { margin: 12px 0; }
+  .score-bar-row { display: flex; align-items: center; margin-bottom: 3px; }
+  .score-bar-label { font-size: 11px; color: #718096; width: 110px; text-align: right; padding-right: 8px; }
+  .score-bar-track { flex: 1; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
+  .score-bar-fill { height: 100%; border-radius: 4px; }
+  .bar-green { background: #48bb78; }
+  .bar-yellow { background: #ecc94b; }
+  .bar-red { background: #fc8181; }
+  .footer { background: #f7fafc; padding: 16px 32px; text-align: center; font-size: 12px; color: #a0aec0; border-top: 1px solid #e2e8f0; }
+  .no-listings { text-align: center; color: #718096; padding: 32px; font-style: italic; }
+
+  @media (max-width: 600px) {
+    .header, .summary, .section, .footer { padding-left: 16px; padding-right: 16px; }
+    .summary-stats { gap: 16px; }
+    .card-header { flex-direction: column; }
+    .deal-badge { margin-top: 8px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>Home Deal Finder</h1>
+    <p>Monthly Market Report &mdash; {{ run_date }}</p>
+  </div>
+
+  <div class="summary">
+    <div class="summary-stats">
+      <div class="stat">
+        <div class="stat-value">{{ total_new }}</div>
+        <div class="stat-label">New Listings</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">{{ total_tracked }}</div>
+        <div class="stat-label">Total Tracked</div>
+      </div>
+      {% if top_deal_count > 0 %}
+      <div class="stat">
+        <div class="stat-value">{{ top_deal_count }}</div>
+        <div class="stat-label">Top Deals</div>
+      </div>
+      {% endif %}
+      {% if avg_score %}
+      <div class="stat">
+        <div class="stat-value">{{ avg_score }}</div>
+        <div class="stat-label">Avg Deal Score</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% for section in sections %}
+  <div class="section">
+    <h2 class="section-title">{{ section.name }} ({{ section.listings|length }})</h2>
+
+    {% if section.listings|length == 0 %}
+    <p class="no-listings">No listings in this category this month.</p>
+    {% endif %}
+
+    {% for listing in section.listings %}
+    <div class="listing-card">
+      <div class="card-body">
+        <div class="card-header">
+          <div>
+            <p class="card-address">{{ listing.address }}</p>
+            <p class="card-location">{{ listing.city }}, {{ listing.state }} {{ listing.zip_code }}</p>
+          </div>
+          {% if listing.deal_score is not none %}
+          <span class="deal-badge {% if listing.deal_score >= 70 %}deal-great{% elif listing.deal_score >= 50 %}deal-good{% else %}deal-fair{% endif %}">
+            {{ listing.deal_score }}
+          </span>
+          {% endif %}
+        </div>
+
+        <div class="card-price">${{ "{:,.0f}".format(listing.price) }}</div>
+
+        <div class="card-details">
+          {% if listing.bedrooms %}<span class="detail"><span class="detail-value">{{ listing.bedrooms }}</span> bed</span>{% endif %}
+          {% if listing.bathrooms %}<span class="detail"><span class="detail-value">{{ listing.bathrooms }}</span> bath</span>{% endif %}
+          {% if listing.sqft %}<span class="detail"><span class="detail-value">{{ "{:,.0f}".format(listing.sqft) }}</span> sqft</span>{% endif %}
+          {% if listing.lot_sqft %}<span class="detail"><span class="detail-value">{{ "{:,.0f}".format(listing.lot_sqft) }}</span> lot sqft</span>{% endif %}
+          {% if listing.year_built %}<span class="detail">Built <span class="detail-value">{{ listing.year_built }}</span></span>{% endif %}
+          {% if listing.days_on_market is not none %}<span class="detail"><span class="detail-value">{{ listing.days_on_market }}</span> DOM</span>{% endif %}
+        </div>
+
+        <div class="highlights">
+          {% for h in listing.highlights %}
+          <span class="highlight {{ h.css_class }}">{{ h.text }}</span>
+          {% endfor %}
+        </div>
+
+        {% if listing.score_breakdown %}
+        <div class="score-bars">
+          {% for name, value in listing.top_scores %}
+          <div class="score-bar-row">
+            <span class="score-bar-label">{{ name }}</span>
+            <div class="score-bar-track">
+              <div class="score-bar-fill {% if value >= 0.7 %}bar-green{% elif value >= 0.4 %}bar-yellow{% else %}bar-red{% endif %}"
+                   style="width: {{ (value * 100)|int }}%"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="card-links">
+          {% for source_name, url in listing.source_urls.items() %}
+          {% if url %}
+          <a href="{{ url }}" target="_blank">View on {{ source_name|capitalize }}</a>
+          {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+
+  <div class="footer">
+    <p>Generated by Home Deal Finder &mdash; For personal use only</p>
+    <p>Data sourced from public real estate listings. Scores are estimates, not financial advice.</p>
+  </div>
+</div>
+</body>
+</html>

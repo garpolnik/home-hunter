@@ -1,0 +1,44 @@
+name: Monthly Home Deal Scan
+
+on:
+  schedule:
+    # Run on the 1st of every month at 8:00 AM UTC
+    - cron: '0 8 1 * *'
+  workflow_dispatch:  # Allow manual triggers
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run home deal finder
+        env:
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+          WALKSCORE_API_KEY: ${{ secrets.WALKSCORE_API_KEY }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+        run: python -m src
+
+      - name: Commit updated database
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/listings.db data/latest_newsletter.html
+          git diff --cached --quiet || git commit -m "Update listings database [$(date +%Y-%m-%d)]"
+          git push
