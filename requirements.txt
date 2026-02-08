@@ -1,7 +1,12 @@
-requests>=2.31.0
-pandas>=2.1.0
-pydantic>=2.5.0
-pyyaml>=6.0.1
-jinja2>=3.1.2
-sendgrid>=6.10.0
-python-Levenshtein>=0.23.0
+# Core dependencies - pinned to specific versions for reproducibility and security.
+# Only update versions after verifying no known vulnerabilities (pip-audit).
+requests==2.32.3
+pandas==2.2.3
+pydantic==2.10.6
+pyyaml==6.0.2
+jinja2==3.1.5
+sendgrid==6.11.0
+python-Levenshtein==0.26.1
+
+# Web GUI
+flask==3.1.0

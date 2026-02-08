@@ -2,17 +2,53 @@ import logging
 import sys
 from pathlib import Path
 
-from src.config import AppConfig, load_config
+from src.config import AppConfig, FilterConfig, load_config
 from src.db import Database
 from src.dedup.deduplicator import Deduplicator
 from src.fetchers.base import BaseFetcher
 from src.fetchers.redfin import RedfinFetcher
-from src.models import AreaStats
+from src.models import AreaStats, Listing
 from src.newsletter.generator import NewsletterGenerator
 from src.newsletter.sender import EmailSender
+from src.map_generator import generate_map
 from src.scoring.engine import ScoringEngine
 
 logger = logging.getLogger(__name__)
+
+
+def _passes_age_filter(
+    listing: Listing,
+    area_stats: dict[str, AreaStats],
+    filters: FilterConfig,
+) -> bool:
+    """
+    Determine if a listing should be included based on dynamic market-aware age limits.
+    Uses area median DOM * multiplier as the threshold, capped by an absolute max.
+    In a hot market (low median DOM), stale listings are filtered aggressively.
+    In a slow market (high median DOM), the threshold is more generous.
+    """
+    if listing.days_on_market is None:
+        return True  # Can't filter without DOM data
+
+    # Get area-specific median DOM
+    zip_stats = area_stats.get(listing.zip_code)
+    median_dom = zip_stats.median_dom if zip_stats and zip_stats.median_dom else 30
+
+    # Dynamic threshold = median * multiplier, capped by absolute max
+    dynamic_max = int(median_dom * filters.max_dom_multiplier)
+    effective_max = min(dynamic_max, filters.max_dom_absolute)
+
+    # Always have a floor of 30 days so we don't filter too aggressively
+    effective_max = max(effective_max, 30)
+
+    if listing.days_on_market > effective_max:
+        logger.debug(
+            f"Filtered stale listing: {listing.address} "
+            f"(DOM={listing.days_on_market}, max={effective_max}, "
+            f"median={median_dom})"
+        )
+        return False
+    return True
 
 
 def get_enabled_fetchers(config: AppConfig) -> list[BaseFetcher]:
@@ -121,13 +157,38 @@ def run(config_path: str = "config/config.yaml"):
             except Exception:
                 logger.exception(f"Enricher failed for {listing.address}")
 
-    # Phase 5: Compute area stats and score all listings
+    # Phase 4.5: Filter stale listings based on dynamic market-aware threshold
+    logger.info("--- Phase 4.5: Dynamic Listing Age Filter ---")
+    all_listings_unfiltered = new_listings + updated_listings
+
+    # First pass: persist and compute area stats so we have median DOM
+    db.upsert_listings(all_listings_unfiltered)
+    area_stats = db.compute_area_stats()
+
+    filters = config.search.filters
+    if filters.max_dom_multiplier is not None:
+        before_count = len(all_listings_unfiltered)
+        filtered_new = []
+        filtered_updated = []
+
+        for listing in new_listings:
+            if _passes_age_filter(listing, area_stats, filters):
+                filtered_new.append(listing)
+        for listing in updated_listings:
+            if _passes_age_filter(listing, area_stats, filters):
+                filtered_updated.append(listing)
+
+        new_listings = filtered_new
+        updated_listings = filtered_updated
+        removed = before_count - len(new_listings) - len(updated_listings)
+        logger.info(f"Listing age filter: removed {removed} stale listings "
+                    f"(kept {len(new_listings)} new, {len(updated_listings)} updated)")
+    else:
+        logger.info("Dynamic listing age filter disabled")
+
+    # Phase 5: Score all remaining listings
     logger.info("--- Phase 5: Scoring ---")
     all_listings = new_listings + updated_listings
-
-    # Persist first so area stats include current data
-    db.upsert_listings(all_listings)
-    area_stats = db.compute_area_stats()
 
     scorer = ScoringEngine(config.scoring.weights, config)
     for listing in all_listings:
@@ -143,8 +204,12 @@ def run(config_path: str = "config/config.yaml"):
         top = max(scored, key=lambda l: l.deal_score)
         logger.info(f"Avg deal score: {avg:.1f}, Best: {top.deal_score} ({top.address})")
 
-    # Phase 6: Generate and send newsletter
-    logger.info("--- Phase 6: Newsletter ---")
+    # Phase 6: Generate interactive map
+    logger.info("--- Phase 6: Map Generation ---")
+    generate_map(all_listings, "data/map.html")
+
+    # Phase 7: Generate and send newsletter
+    logger.info("--- Phase 7: Newsletter ---")
     generator = NewsletterGenerator(config)
     html = generator.render(new_listings, all_listings, area_stats)
 

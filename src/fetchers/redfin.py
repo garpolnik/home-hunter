@@ -8,6 +8,7 @@ import pandas as pd
 from src.config import AppConfig, LocationConfig
 from src.fetchers.base import BaseFetcher
 from src.models import Listing, ListingSource, PropertyType
+from src.security import sanitize_string, sanitize_url, sanitize_numeric
 
 logger = logging.getLogger(__name__)
 
@@ -151,8 +152,8 @@ class RedfinFetcher(BaseFetcher):
         return listings
 
     def _row_to_listing(self, row: pd.Series) -> Listing | None:
-        """Map a Redfin CSV row to our Listing model."""
-        address = str(row.get("ADDRESS", "")).strip()
+        """Map a Redfin CSV row to our Listing model, with input sanitization."""
+        address = sanitize_string(str(row.get("ADDRESS", "")), "address")
         price = row.get("PRICE")
 
         if not address or pd.isna(price):
@@ -162,28 +163,25 @@ class RedfinFetcher(BaseFetcher):
         prop_type_str = str(row.get("PROPERTY TYPE", ""))
         property_type = PROPERTY_TYPE_MAP.get(prop_type_str)
 
-        # Parse optional numeric fields safely
-        def safe_int(val) -> int | None:
+        # Parse optional numeric fields safely with range validation
+        def safe_int(val, field: str = "unknown", min_v: float = 0, max_v: float = 1e9) -> int | None:
             if pd.isna(val):
                 return None
-            try:
-                return int(float(val))
-            except (ValueError, TypeError):
-                return None
+            result = sanitize_numeric(val, field, min_v, max_v)
+            return int(result) if result is not None else None
 
-        def safe_float(val) -> float | None:
+        def safe_float(val, field: str = "unknown", min_v: float = 0, max_v: float = 1e9) -> float | None:
             if pd.isna(val):
                 return None
-            try:
-                return float(val)
-            except (ValueError, TypeError):
-                return None
+            result = sanitize_numeric(val, field, min_v, max_v)
+            return float(result) if result is not None else None
 
-        # Build source URL
+        # Build and validate source URL
         url_path = row.get("URL (SEE https://www.redfin.com/buy-a-home/comparative-market-analysis FOR INFO ON PRICING)", "")
         if pd.isna(url_path):
             url_path = ""
-        source_url = f"https://www.redfin.com{url_path}" if url_path else ""
+        raw_url = f"https://www.redfin.com{url_path}" if url_path else ""
+        source_url = sanitize_url(raw_url, "source_url")
 
         # Parse list date
         list_date = None
@@ -196,25 +194,25 @@ class RedfinFetcher(BaseFetcher):
 
         listing = Listing(
             source=ListingSource.REDFIN,
-            source_id=str(row.get("MLS#", row.get("REDFIN ESTIMATE", ""))),
+            source_id=sanitize_string(str(row.get("MLS#", row.get("REDFIN ESTIMATE", ""))), "source_id"),
             source_url=source_url,
             address=address,
-            city=str(row.get("CITY", "")).strip(),
-            state=str(row.get("STATE OR PROVINCE", "")).strip(),
-            zip_code=str(row.get("ZIP OR POSTAL CODE", "")).strip(),
+            city=sanitize_string(str(row.get("CITY", "")), "city"),
+            state=sanitize_string(str(row.get("STATE OR PROVINCE", "")), "state"),
+            zip_code=sanitize_string(str(row.get("ZIP OR POSTAL CODE", "")), "zip_code"),
             price=int(float(price)),
             property_type=property_type,
-            bedrooms=safe_int(row.get("BEDS")),
-            bathrooms=safe_float(row.get("BATHS")),
-            sqft=safe_int(row.get("SQUARE FEET")),
-            lot_sqft=safe_int(row.get("LOT SIZE")),
-            year_built=safe_int(row.get("YEAR BUILT")),
-            hoa_monthly=safe_float(row.get("HOA/MONTH")),
+            bedrooms=safe_int(row.get("BEDS"), "bedrooms", 0, 50),
+            bathrooms=safe_float(row.get("BATHS"), "bathrooms", 0, 50),
+            sqft=safe_int(row.get("SQUARE FEET"), "sqft", 0, 500_000),
+            lot_sqft=safe_int(row.get("LOT SIZE"), "lot_sqft", 0, 50_000_000),
+            year_built=safe_int(row.get("YEAR BUILT"), "year_built", 1600, 2030),
+            hoa_monthly=safe_float(row.get("HOA/MONTH"), "hoa_monthly", 0, 50_000),
             list_date=list_date,
-            days_on_market=safe_int(row.get("DAYS ON MARKET")),
-            latitude=safe_float(row.get("LATITUDE")),
-            longitude=safe_float(row.get("LONGITUDE")),
-            redfin_estimate=safe_int(row.get("REDFIN ESTIMATE")),
+            days_on_market=safe_int(row.get("DAYS ON MARKET"), "days_on_market", 0, 10_000),
+            latitude=safe_float(row.get("LATITUDE"), "latitude", -90, 90),
+            longitude=safe_float(row.get("LONGITUDE"), "longitude", -180, 180),
+            redfin_estimate=safe_int(row.get("REDFIN ESTIMATE"), "redfin_estimate", 0, 100_000_000),
             status="active",
             source_urls={"redfin": source_url},
         )

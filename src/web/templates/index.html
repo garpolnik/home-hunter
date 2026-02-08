@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Home Deal Finder</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f7fafc; color: #2d3748; }
+  .navbar { background: #1a365d; color: white; padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; }
+  .navbar h1 { font-size: 22px; font-weight: 600; }
+  .navbar-links a { color: #bee3f8; text-decoration: none; margin-left: 24px; font-size: 14px; font-weight: 500; }
+  .navbar-links a:hover { color: white; }
+  .hero { background: linear-gradient(135deg, #1a365d 0%, #2b6cb0 100%); color: white; padding: 48px 32px; text-align: center; }
+  .hero h2 { font-size: 32px; margin-bottom: 12px; }
+  .hero p { font-size: 16px; opacity: 0.9; max-width: 600px; margin: 0 auto; }
+  .container { max-width: 800px; margin: 0 auto; padding: 32px; }
+  .card { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 32px; margin-bottom: 24px; }
+  .card h3 { font-size: 20px; color: #1a365d; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #e2e8f0; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-group { margin-bottom: 16px; }
+  .form-group.full-width { grid-column: 1 / -1; }
+  .form-group label { display: block; font-size: 13px; font-weight: 600; color: #4a5568; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .form-group input, .form-group select { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 15px; transition: border-color 0.2s; }
+  .form-group input:focus, .form-group select:focus { outline: none; border-color: #3182ce; box-shadow: 0 0 0 3px rgba(49,130,206,0.1); }
+  .form-group .hint { font-size: 12px; color: #a0aec0; margin-top: 2px; }
+  .checkbox-group { display: flex; flex-wrap: wrap; gap: 16px; }
+  .checkbox-item { display: flex; align-items: center; gap: 6px; }
+  .checkbox-item input[type="checkbox"] { width: 18px; height: 18px; accent-color: #3182ce; }
+  .checkbox-item label { font-size: 14px; color: #4a5568; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .features-section { margin-top: 8px; }
+  .features-section h4 { font-size: 14px; color: #4a5568; margin-bottom: 8px; font-weight: 600; }
+  .btn { display: inline-block; padding: 12px 32px; border: none; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+  .btn-primary { background: #3182ce; color: white; }
+  .btn-primary:hover { background: #2b6cb0; }
+  .btn-block { width: 100%; text-align: center; }
+  .flash { padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; }
+  .flash-success { background: #f0fff4; color: #276749; border: 1px solid #c6f6d5; }
+  .flash-error { background: #fff5f5; color: #9b2c2c; border: 1px solid #fed7d7; }
+  .quick-links { display: flex; gap: 16px; justify-content: center; margin-top: 24px; }
+  .quick-links a { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; background: white; color: #3182ce; border-radius: 6px; text-decoration: none; font-weight: 500; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: all 0.2s; }
+  .quick-links a:hover { box-shadow: 0 4px 6px rgba(0,0,0,0.1); transform: translateY(-1px); }
+  .footer { text-align: center; padding: 24px; color: #a0aec0; font-size: 12px; }
+
+  @media (max-width: 600px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .hero h2 { font-size: 24px; }
+    .container { padding: 16px; }
+    .quick-links { flex-direction: column; align-items: center; }
+  }
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <h1>Home Deal Finder</h1>
+  <div class="navbar-links">
+    <a href="/map">Live Map</a>
+    <a href="/newsletter">Latest Report</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <h2>Find Your Perfect Home Deal</h2>
+  <p>Set your search criteria and get a monthly report of the best home deals in your area, scored by 14 market factors.</p>
+  <div class="quick-links">
+    <a href="/map">View Interactive Map</a>
+    <a href="/newsletter">Latest Newsletter</a>
+  </div>
+</div>
+
+<div class="container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="flash flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <form action="/subscribe" method="POST">
+    <div class="card">
+      <h3>Your Search Criteria</h3>
+      <div class="form-grid">
+        <div class="form-group full-width">
+          <label for="zip_codes">ZIP Codes</label>
+          <input type="text" id="zip_codes" name="zip_codes" placeholder="08002, 08003, 08033" required>
+          <div class="hint">Enter one or more 5-digit ZIP codes, separated by commas</div>
+        </div>
+
+        <div class="form-group">
+          <label for="min_price">Min Price ($)</label>
+          <input type="number" id="min_price" name="min_price" placeholder="250000" min="0" step="10000" value="250000">
+        </div>
+        <div class="form-group">
+          <label for="max_price">Max Price ($)</label>
+          <input type="number" id="max_price" name="max_price" placeholder="550000" min="0" step="10000" value="550000">
+        </div>
+
+        <div class="form-group">
+          <label for="min_beds">Min Bedrooms</label>
+          <select id="min_beds" name="min_beds">
+            <option value="0">Any</option>
+            <option value="1">1+</option>
+            <option value="2">2+</option>
+            <option value="3" selected>3+</option>
+            <option value="4">4+</option>
+            <option value="5">5+</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="min_baths">Min Bathrooms</label>
+          <select id="min_baths" name="min_baths">
+            <option value="0">Any</option>
+            <option value="1">1+</option>
+            <option value="2" selected>2+</option>
+            <option value="3">3+</option>
+            <option value="4">4+</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="min_sqft">Min Square Feet</label>
+          <input type="number" id="min_sqft" name="min_sqft" placeholder="1500" min="0" step="100" value="1500">
+        </div>
+        <div class="form-group">
+          <label>Property Types</label>
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <input type="checkbox" id="pt_sf" name="property_types" value="single_family" checked>
+              <label for="pt_sf">Single Family</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="pt_th" name="property_types" value="townhouse" checked>
+              <label for="pt_th">Townhouse</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="pt_co" name="property_types" value="condo">
+              <label for="pt_co">Condo</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="pt_mf" name="property_types" value="multi_family">
+              <label for="pt_mf">Multi-Family</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group full-width">
+          <div class="features-section">
+            <h4>Desired Features</h4>
+            <div class="checkbox-group">
+              <div class="checkbox-item">
+                <input type="checkbox" id="garage" name="garage">
+                <label for="garage">Garage</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" id="pool" name="pool">
+                <label for="pool">Pool</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" id="basement" name="basement">
+                <label for="basement">Basement</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Newsletter Subscription</h3>
+      <div class="form-group">
+        <label for="email">Email Address</label>
+        <input type="email" id="email" name="email" placeholder="you@example.com" required>
+        <div class="hint">You'll receive a monthly report on the 1st of each month with the best deals matching your criteria.</div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Subscribe to Monthly Report</button>
+    </div>
+  </form>
+</div>
+
+<div class="footer">
+  <p>Home Deal Finder &mdash; Data sourced from public real estate listings. Scores are estimates, not financial advice.</p>
+</div>
+</body>
+</html>

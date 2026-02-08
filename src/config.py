@@ -25,6 +25,12 @@ class FilterConfig:
     min_year_built: int | None = None
     max_year_built: int | None = None
     exclude_hoa_over: float | None = None
+    # Dynamic listing age filter: exclude listings older than (area median DOM * multiplier).
+    # E.g., if median DOM is 30 days and multiplier is 4, max is 120 days.
+    # Set to None to disable dynamic filtering.
+    max_dom_multiplier: float = 4.0
+    # Absolute cap in days - never show listings older than this regardless of market
+    max_dom_absolute: int = 365
 
 
 @dataclass
@@ -176,6 +182,8 @@ def load_config(path: str | Path = "config/config.yaml") -> AppConfig:
                 min_year_built=f.get("min_year_built"),
                 max_year_built=f.get("max_year_built"),
                 exclude_hoa_over=f.get("exclude_hoa_over"),
+                max_dom_multiplier=f.get("max_dom_multiplier", 4.0),
+                max_dom_absolute=f.get("max_dom_absolute", 365),
             )
 
     # Sources

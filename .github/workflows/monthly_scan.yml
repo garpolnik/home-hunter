@@ -39,6 +39,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/listings.db data/latest_newsletter.html
+          git add data/listings.db data/latest_newsletter.html data/map.html
           git diff --cached --quiet || git commit -m "Update listings database [$(date +%Y-%m-%d)]"
           git push

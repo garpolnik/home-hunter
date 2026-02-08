@@ -15,6 +15,7 @@ dependencies = [
     "jinja2>=3.1.2",
     "sendgrid>=6.10.0",
     "python-Levenshtein>=0.23.0",
+    "flask>=3.1.0",
 ]
 
 [project.optional-dependencies]

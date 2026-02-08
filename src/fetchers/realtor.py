@@ -8,6 +8,7 @@ import requests
 from src.config import AppConfig, LocationConfig
 from src.fetchers.base import BaseFetcher
 from src.models import Listing, ListingSource, PriceHistoryEntry, PropertyType
+from src.security import sanitize_string, sanitize_url, sanitize_numeric
 
 logger = logging.getLogger(__name__)
 
@@ -130,21 +131,21 @@ class RealtorFetcher(BaseFetcher):
         return listings
 
     def _result_to_listing(self, result: dict) -> Listing | None:
-        """Map a Realtor.com API result to our Listing model."""
+        """Map a Realtor.com API result to our Listing model, with input sanitization."""
         location = result.get("location", {})
         address_data = location.get("address", {})
         description = result.get("description", {})
 
-        address = address_data.get("line", "")
+        address = sanitize_string(str(address_data.get("line", "")), "address")
         if not address:
             return None
 
-        price = result.get("list_price")
+        price = sanitize_numeric(result.get("list_price"), "price", 0, 100_000_000)
         if not price:
             return None
 
         # Property type
-        prop_type_str = description.get("type", "")
+        prop_type_str = str(description.get("type", ""))
         property_type = PROPERTY_TYPE_MAP.get(prop_type_str)
 
         # Features
@@ -153,57 +154,65 @@ class RealtorFetcher(BaseFetcher):
         has_pool = None
         if description.get("garage"):
             has_garage = True
-            garage_spaces = description.get("garage")
+            garage_spaces = sanitize_numeric(description.get("garage"), "garage_spaces", 0, 20)
+            garage_spaces = int(garage_spaces) if garage_spaces else None
         if result.get("flags", {}).get("is_pool_property"):
             has_pool = True
 
         # List date
         list_date = None
         raw_date = result.get("list_date")
-        if raw_date:
+        if raw_date and isinstance(raw_date, str):
             try:
                 list_date = date.fromisoformat(raw_date[:10])
             except ValueError:
                 pass
 
-        # Photo
+        # Photo - allow any domain since these are CDN URLs
         photo_url = None
         photos = result.get("photos", [])
-        if photos:
-            photo_url = photos[0].get("href")
+        if photos and isinstance(photos, list):
+            raw_photo = photos[0].get("href", "") if isinstance(photos[0], dict) else ""
+            photo_url = sanitize_url(str(raw_photo), "photo_url", allow_any_domain=True)
 
         # Coordinates
         coord = location.get("coordinate", {}) or {}
 
         # Source URL
-        permalink = result.get("permalink", "")
-        source_url = f"https://www.realtor.com/realestateandhomes-detail/{permalink}" if permalink else ""
+        permalink = sanitize_string(str(result.get("permalink", "")), "source_id")
+        raw_url = f"https://www.realtor.com/realestateandhomes-detail/{permalink}" if permalink else ""
+        source_url = sanitize_url(raw_url, "source_url")
 
         listing = Listing(
             source=ListingSource.REALTOR,
-            source_id=str(result.get("property_id", "")),
+            source_id=sanitize_string(str(result.get("property_id", "")), "source_id"),
             source_url=source_url,
             address=address,
-            city=address_data.get("city", ""),
-            state=address_data.get("state_code", ""),
-            zip_code=str(address_data.get("postal_code", "")),
-            county=address_data.get("county", ""),
-            latitude=coord.get("lat"),
-            longitude=coord.get("lon"),
+            city=sanitize_string(str(address_data.get("city", "")), "city"),
+            state=sanitize_string(str(address_data.get("state_code", "")), "state"),
+            zip_code=sanitize_string(str(address_data.get("postal_code", "")), "zip_code"),
+            county=sanitize_string(str(address_data.get("county", "")), "county"),
+            latitude=sanitize_numeric(coord.get("lat"), "latitude", -90, 90),
+            longitude=sanitize_numeric(coord.get("lon"), "longitude", -180, 180),
             price=int(price),
             property_type=property_type,
-            bedrooms=description.get("beds"),
-            bathrooms=description.get("baths"),
-            sqft=description.get("sqft"),
-            lot_sqft=description.get("lot_sqft"),
-            year_built=description.get("year_built"),
-            stories=description.get("stories"),
+            bedrooms=sanitize_numeric(description.get("beds"), "bedrooms", 0, 50),
+            bathrooms=sanitize_numeric(description.get("baths"), "bathrooms", 0, 50),
+            sqft=sanitize_numeric(description.get("sqft"), "sqft", 0, 500_000),
+            lot_sqft=sanitize_numeric(description.get("lot_sqft"), "lot_sqft", 0, 50_000_000),
+            year_built=sanitize_numeric(description.get("year_built"), "year_built", 1600, 2030),
+            stories=sanitize_numeric(description.get("stories"), "stories", 0, 200),
             has_garage=has_garage,
             garage_spaces=garage_spaces,
             has_pool=has_pool,
-            hoa_monthly=result.get("hoa", {}).get("fee") if result.get("hoa") else None,
+            hoa_monthly=sanitize_numeric(
+                result.get("hoa", {}).get("fee") if result.get("hoa") else None,
+                "hoa_monthly", 0, 50_000
+            ),
             list_date=list_date,
-            days_on_market=result.get("list_date_min_days_on_market"),
+            days_on_market=sanitize_numeric(
+                result.get("list_date_min_days_on_market"), "days_on_market", 0, 10_000
+            ),
             photo_url=photo_url,
             status="active",
             source_urls={"realtor": source_url},

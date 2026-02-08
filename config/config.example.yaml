@@ -24,6 +24,12 @@ search:
     min_sqft: 1500
     min_year_built: 1960
     exclude_hoa_over: 400
+    # Dynamic listing age: hide listings older than (area median DOM * multiplier).
+    # In a hot market with 15-day median, 4x = 60 days max.
+    # In a slow market with 60-day median, 4x = 240 days max.
+    max_dom_multiplier: 4.0
+    # Absolute cap - never show listings older than this (days)
+    max_dom_absolute: 365
 
 # Data sources
 sources:
