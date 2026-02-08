@@ -48,6 +48,24 @@
   .bar-red { background: #fc8181; }
   .footer { background: #f7fafc; padding: 16px 32px; text-align: center; font-size: 12px; color: #a0aec0; border-top: 1px solid #e2e8f0; }
   .no-listings { text-align: center; color: #718096; padding: 32px; font-style: italic; }
+  .market-report { background: #f7fafc; padding: 24px 32px; border-bottom: 1px solid #e2e8f0; }
+  .market-report h2 { font-size: 18px; color: #1a365d; margin: 0 0 16px; }
+  .market-condition { display: inline-block; padding: 4px 14px; border-radius: 12px; font-size: 14px; font-weight: 700; color: white; margin-bottom: 12px; }
+  .condition-very_hot { background: #e53e3e; }
+  .condition-hot { background: #ed8936; }
+  .condition-normal { background: #38a169; }
+  .condition-slow { background: #3182ce; }
+  .condition-very_slow { background: #805ad5; }
+  .market-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 12px 0; }
+  .market-stat { background: white; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; }
+  .market-stat-value { font-size: 20px; font-weight: 700; color: #2d3748; }
+  .market-stat-label { font-size: 11px; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; }
+  .market-recommendation { background: white; padding: 14px 16px; border-radius: 6px; border-left: 4px solid #3182ce; margin-top: 12px; font-size: 14px; color: #4a5568; line-height: 1.5; }
+  .market-recommendation strong { color: #1a365d; }
+  .zip-breakdown { margin-top: 12px; font-size: 13px; }
+  .zip-breakdown table { width: 100%; border-collapse: collapse; }
+  .zip-breakdown th { text-align: left; padding: 6px 8px; font-size: 11px; text-transform: uppercase; color: #718096; border-bottom: 2px solid #e2e8f0; }
+  .zip-breakdown td { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; color: #4a5568; }
 
   @media (max-width: 600px) {
     .header, .summary, .section, .footer { padding-left: 16px; padding-right: 16px; }
@@ -88,6 +106,65 @@
       {% endif %}
     </div>
   </div>
+
+  {% if market %}
+  <div class="market-report">
+    <h2>Market Analysis</h2>
+    <span class="market-condition condition-{{ market.condition }}">{{ market.condition_label }}</span>
+
+    <div class="market-stats-grid">
+      <div class="market-stat">
+        <div class="market-stat-value">{{ market.median_dom|int }} days</div>
+        <div class="market-stat-label">Median Days on Market</div>
+      </div>
+      <div class="market-stat">
+        <div class="market-stat-value">{{ market.dom_25th_percentile|int }}-{{ market.dom_75th_percentile|int }}</div>
+        <div class="market-stat-label">DOM Range (25th-75th)</div>
+      </div>
+      <div class="market-stat">
+        <div class="market-stat-value">{{ market.pct_with_reductions|round(0)|int }}%</div>
+        <div class="market-stat-label">Had Price Reductions</div>
+      </div>
+      {% if market.avg_reduction_pct > 0 %}
+      <div class="market-stat">
+        <div class="market-stat-value">{{ market.avg_reduction_pct|round(1) }}%</div>
+        <div class="market-stat-label">Avg Price Reduction</div>
+      </div>
+      {% endif %}
+      <div class="market-stat">
+        <div class="market-stat-value">{{ market.recommended_max_dom_absolute }}</div>
+        <div class="market-stat-label">Recommended Max DOM</div>
+      </div>
+    </div>
+
+    <div class="market-recommendation">
+      <strong>Recommendation:</strong> {{ market.recommendation_description }}
+    </div>
+
+    {% if market.zip_conditions %}
+    <div class="zip-breakdown">
+      <table>
+        <tr>
+          <th>ZIP Code</th>
+          <th>Condition</th>
+          <th>Median DOM</th>
+          <th>Listings</th>
+          <th>Rec. Max DOM</th>
+        </tr>
+        {% for zip, data in market.zip_conditions.items()|sort %}
+        <tr>
+          <td>{{ zip }}</td>
+          <td>{{ data.condition_label }}</td>
+          <td>{{ data.median_dom }} days</td>
+          <td>{{ data.sample_size }}</td>
+          <td>{{ data.recommended_max_dom }} days</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
 
   {% for section in sections %}
   <div class="section">

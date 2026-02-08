@@ -160,6 +160,7 @@ class NewsletterGenerator:
         new_listings: list[Listing],
         all_listings: list[Listing],
         area_stats: dict[str, AreaStats],
+        market_report=None,
     ) -> str:
         """Render the newsletter HTML."""
         sections = self._build_sections(new_listings, all_listings)
@@ -180,4 +181,5 @@ class NewsletterGenerator:
             total_tracked=len(all_listings),
             top_deal_count=top_deal_count,
             avg_score=avg_score,
+            market=market_report,
         )

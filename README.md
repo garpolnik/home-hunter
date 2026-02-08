@@ -140,8 +140,9 @@ This executes the full pipeline:
 1. Fetches listings from all enabled sources
 2. Deduplicates across sources
 3. Enriches with walk score, flood zone, and commute data
-4. Filters out stale listings based on market conditions
-5. Scores every listing on 14 criteria (0-100 deal score)
+4. Analyzes market conditions and recommends DOM filter settings
+5. Filters out stale listings using market-aware thresholds
+6. Scores every listing on 14 criteria (0-100 deal score)
 6. Generates an interactive map at `data/map.html`
 7. Sends an HTML newsletter via SendGrid (or saves to `data/latest_newsletter.html` if no API key)
 
@@ -305,6 +306,7 @@ home-hunter/
 │   ├── models.py                  # Data models (Listing, AreaStats)
 │   ├── db.py                      # SQLite database layer
 │   ├── security.py                # Input sanitization for external API data
+│   ├── market_analyzer.py         # Market condition analysis & DOM recommendations
 │   ├── map_generator.py           # Interactive Leaflet.js map
 │   ├── fetchers/
 │   │   ├── base.py                # Abstract fetcher
@@ -355,6 +357,32 @@ Key scoring signals:
 - **Price per SqFt (12%)** - Compared to the ZIP code median. 30%+ below median scores 1.0.
 - **Days on Market (8%)** - Listings sitting longer give you more negotiating power.
 - **Price Reductions (8%)** - Multiple price drops indicate a motivated seller.
+
+## Market Analysis & Recommended Settings
+
+Each run automatically analyzes the current housing market and recommends DOM filter settings. The market analyzer studies your listings to determine how fast homes are selling, then classifies conditions and adjusts filtering accordingly.
+
+### Market Classifications
+
+| Condition | Median DOM | Recommended Max DOM | What it means |
+|-----------|-----------|-------------------|---------------|
+| Very Hot | < 14 days | 60 days | Homes sell in days. Anything sitting longer likely has issues. |
+| Hot | 14-30 days | 120 days | Strong seller's market. Desirable homes go under contract within a month. |
+| Normal | 30-60 days | 180 days | Balanced market with room for negotiation. |
+| Slow | 60-90 days | 270 days | Buyer's market. Inventory building up, sellers may be flexible. |
+| Very Slow | 90+ days | 365 days | Stagnant market. Many motivated sellers open to below-asking offers. |
+
+### What gets analyzed
+
+- **Median & percentile DOM** - how fast homes are selling across your search area
+- **Price reduction frequency** - what % of listings have had price drops (seller desperation signal)
+- **Average reduction magnitude** - how much sellers are cutting prices
+- **Inventory freshness** - ratio of new listings to total tracked
+- **Per-ZIP breakdown** - each ZIP code gets its own market classification
+
+The analyzer also cross-references signals. For example, if median DOM looks "hot" but 30%+ of listings have price reductions, the market is likely cooling and the filter is adjusted to "normal" to avoid being too aggressive.
+
+Results appear in the pipeline logs, in the newsletter's "Market Analysis" section, and as a per-ZIP breakdown table.
 
 ## How Deduplication Works
 

@@ -11,6 +11,7 @@ from src.models import AreaStats, Listing
 from src.newsletter.generator import NewsletterGenerator
 from src.newsletter.sender import EmailSender
 from src.map_generator import generate_map
+from src.market_analyzer import analyze_market, format_market_report
 from src.scoring.engine import ScoringEngine
 
 logger = logging.getLogger(__name__)
@@ -157,25 +158,49 @@ def run(config_path: str = "config/config.yaml"):
             except Exception:
                 logger.exception(f"Enricher failed for {listing.address}")
 
-    # Phase 4.5: Filter stale listings based on dynamic market-aware threshold
-    logger.info("--- Phase 4.5: Dynamic Listing Age Filter ---")
+    # Phase 4.5: Market analysis and dynamic listing age filter
+    logger.info("--- Phase 4.5: Market Analysis & Listing Age Filter ---")
     all_listings_unfiltered = new_listings + updated_listings
 
     # First pass: persist and compute area stats so we have median DOM
     db.upsert_listings(all_listings_unfiltered)
     area_stats = db.compute_area_stats()
 
+    # Run market analysis to get recommended settings
+    market_report = analyze_market(all_listings_unfiltered, new_listings, area_stats)
+    logger.info("\n" + format_market_report(market_report))
+
+    # Use market-recommended settings if config is set to "auto", otherwise use config values
     filters = config.search.filters
     if filters.max_dom_multiplier is not None:
+        # Apply the market-recommended absolute cap if it's stricter than config
+        effective_absolute = min(
+            filters.max_dom_absolute,
+            market_report.recommended_max_dom_absolute,
+        )
+        effective_multiplier = market_report.recommended_max_dom_multiplier
+
+        logger.info(
+            f"DOM filter: using market-recommended multiplier={effective_multiplier}, "
+            f"absolute={effective_absolute} days "
+            f"(market={market_report.condition_label})"
+        )
+
+        # Override filter settings with market-aware values for this run
+        effective_filters = FilterConfig(
+            max_dom_multiplier=effective_multiplier,
+            max_dom_absolute=effective_absolute,
+        )
+
         before_count = len(all_listings_unfiltered)
         filtered_new = []
         filtered_updated = []
 
         for listing in new_listings:
-            if _passes_age_filter(listing, area_stats, filters):
+            if _passes_age_filter(listing, area_stats, effective_filters):
                 filtered_new.append(listing)
         for listing in updated_listings:
-            if _passes_age_filter(listing, area_stats, filters):
+            if _passes_age_filter(listing, area_stats, effective_filters):
                 filtered_updated.append(listing)
 
         new_listings = filtered_new
@@ -208,10 +233,10 @@ def run(config_path: str = "config/config.yaml"):
     logger.info("--- Phase 6: Map Generation ---")
     generate_map(all_listings, "data/map.html")
 
-    # Phase 7: Generate and send newsletter
+    # Phase 7: Generate and send newsletter (includes market report)
     logger.info("--- Phase 7: Newsletter ---")
     generator = NewsletterGenerator(config)
-    html = generator.render(new_listings, all_listings, area_stats)
+    html = generator.render(new_listings, all_listings, area_stats, market_report)
 
     sender = EmailSender(config)
     emails_sent = sender.send(html, new_count=len(new_listings))
