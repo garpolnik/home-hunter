@@ -6,16 +6,55 @@ Aggregates home listings from Redfin, Realtor.com, and Zillow, deduplicates them
 
 ### 1. Clone and install
 
+#### macOS / Linux
+
 ```bash
 git clone git@github.com:garpolnik/home-hunter.git
 cd home-hunter
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+#### Windows (Command Prompt)
+
+First, make sure you have [Python 3.11+](https://www.python.org/downloads/) and [Git](https://git-scm.com/download/win) installed. During the Python installer, **check "Add Python to PATH"**.
+
+```cmd
+git clone git@github.com:garpolnik/home-hunter.git
+cd home-hunter
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+#### Windows (PowerShell)
+
+```powershell
+git clone git@github.com:garpolnik/home-hunter.git
+cd home-hunter
+python -m venv venv
+venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+> **Note:** If you get a "running scripts is disabled" error in PowerShell, run this first:
+> ```powershell
+> Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+> ```
+
+> **Note:** If `python` is not recognized on Windows, try `py` instead (e.g., `py -m venv venv`, `py -m src`).
+
 ### 2. Configure your search
 
+macOS / Linux:
 ```bash
 cp config/config.example.yaml config/config.yaml
+```
+
+Windows (Command Prompt or PowerShell):
+```cmd
+copy config\config.example.yaml config\config.yaml
 ```
 
 Edit `config/config.yaml` with your target area and preferences:
@@ -44,9 +83,17 @@ search:
 
 Copy the environment template and fill in your keys:
 
+macOS / Linux:
 ```bash
 cp .env.example .env
 ```
+
+Windows:
+```cmd
+copy .env.example .env
+```
+
+Edit the `.env` file and add your keys:
 
 | Variable | Required | How to get it |
 |----------|----------|---------------|
@@ -57,12 +104,31 @@ cp .env.example .env
 
 Load them before running:
 
+macOS / Linux:
 ```bash
 source .env
 # or export them individually:
 export SENDGRID_API_KEY=SG.xxxxx
 export RAPIDAPI_KEY=xxxxx
 ```
+
+Windows (Command Prompt):
+```cmd
+set SENDGRID_API_KEY=SG.xxxxx
+set RAPIDAPI_KEY=xxxxx
+set WALKSCORE_API_KEY=xxxxx
+set GOOGLE_MAPS_API_KEY=xxxxx
+```
+
+Windows (PowerShell):
+```powershell
+$env:SENDGRID_API_KEY="SG.xxxxx"
+$env:RAPIDAPI_KEY="xxxxx"
+$env:WALKSCORE_API_KEY="xxxxx"
+$env:GOOGLE_MAPS_API_KEY="xxxxx"
+```
+
+> **Tip:** On Windows, you can also set these permanently via **System Properties > Environment Variables** so you don't have to set them every time.
 
 ### 4. Run the scanner
 
