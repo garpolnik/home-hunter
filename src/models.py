@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Any, Optional
 from datetime import date, datetime
 from enum import Enum
 
@@ -94,6 +94,10 @@ class Listing(BaseModel):
 
     # Multi-source tracking
     source_urls: dict[str, str] = {}  # {source_name: url}
+
+    # Display attributes (populated by newsletter generator)
+    highlights: Optional[list[Any]] = None
+    top_scores: Optional[list[Any]] = None
 
 
 class AreaStats(BaseModel):

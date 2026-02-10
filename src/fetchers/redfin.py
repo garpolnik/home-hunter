@@ -44,6 +44,9 @@ class RedfinFetcher(BaseFetcher):
     def __init__(self, config: AppConfig):
         super().__init__(config)
         self._source_config = config.sources.redfin
+        self.session.headers.update({
+            "Referer": "https://www.redfin.com/",
+        })
 
     @property
     def source_name(self) -> str:
