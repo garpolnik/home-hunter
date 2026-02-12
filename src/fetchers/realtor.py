@@ -182,8 +182,10 @@ class RealtorFetcher(BaseFetcher):
         if days_on_market is None and list_date is not None:
             days_on_market = (date.today() - list_date).days
 
-        # Coordinates
+        # Coordinates - check both possible API response paths
         coord = location.get("coordinate", {}) or {}
+        if not coord.get("lat"):
+            coord = address_data.get("coordinate", {}) or {}
 
         # Source URL
         permalink = sanitize_string(str(result.get("permalink", "")), "source_id")
