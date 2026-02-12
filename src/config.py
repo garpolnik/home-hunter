@@ -99,6 +99,7 @@ DEFAULT_WEIGHTS = {
 class ScoringConfig:
     weights: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
     top_deal_threshold: float = 70.0
+    claude_model: str = "claude-haiku-4-5-20251001"
 
 
 @dataclass
@@ -221,6 +222,7 @@ def load_config(path: str | Path = "config/config.yaml") -> AppConfig:
         config.scoring = ScoringConfig(
             weights=weights,
             top_deal_threshold=sc.get("top_deal_threshold", 70.0),
+            claude_model=sc.get("claude_model", "claude-haiku-4-5-20251001"),
         )
 
     # Newsletter

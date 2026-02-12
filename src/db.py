@@ -79,6 +79,16 @@ CREATE TABLE IF NOT EXISTS run_log (
     emails_sent INTEGER,
     errors TEXT
 );
+
+CREATE TABLE IF NOT EXISTS search_requests (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    zip_codes TEXT NOT NULL,
+    preferences TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL,
+    reviewed_at TEXT
+);
 """
 
 
@@ -326,6 +336,57 @@ class Database:
 
         self.conn.commit()
         return stats
+
+    # --- Search request management ---
+
+    def create_search_request(self, email: str, zip_codes: list[str], preferences: dict) -> str:
+        """Create a pending search request. Returns the request ID."""
+        request_id = str(uuid.uuid4())[:16]
+        self.conn.execute(
+            """INSERT INTO search_requests (id, email, zip_codes, preferences, status, created_at)
+               VALUES (?, ?, ?, ?, 'pending', ?)""",
+            (request_id, email, json.dumps(zip_codes), json.dumps(preferences),
+             datetime.now().isoformat()),
+        )
+        self.conn.commit()
+        return request_id
+
+    def get_pending_requests(self) -> list[dict]:
+        """Return all pending search requests."""
+        cursor = self.conn.execute(
+            "SELECT * FROM search_requests WHERE status = 'pending' ORDER BY created_at DESC"
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_all_requests(self) -> list[dict]:
+        """Return all search requests."""
+        cursor = self.conn.execute(
+            "SELECT * FROM search_requests ORDER BY created_at DESC"
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+    def update_request_status(self, request_id: str, status: str):
+        """Update a search request status to 'approved' or 'rejected'."""
+        self.conn.execute(
+            "UPDATE search_requests SET status = ?, reviewed_at = ? WHERE id = ?",
+            (status, datetime.now().isoformat(), request_id),
+        )
+        self.conn.commit()
+
+    def get_request(self, request_id: str) -> dict | None:
+        """Get a single search request by ID."""
+        cursor = self.conn.execute(
+            "SELECT * FROM search_requests WHERE id = ?", (request_id,)
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    def get_approved_subscribers(self) -> list[dict]:
+        """Return all approved search requests (active subscribers)."""
+        cursor = self.conn.execute(
+            "SELECT * FROM search_requests WHERE status = 'approved' ORDER BY created_at"
+        )
+        return [dict(row) for row in cursor.fetchall()]
 
     def log_run(self, listings_fetched: int, new_listings: int, emails_sent: int = 0, errors: str = ""):
         self.conn.execute(

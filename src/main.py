@@ -216,6 +216,8 @@ def run(config_path: str = "config/config.yaml"):
     all_listings = new_listings + updated_listings
 
     scorer = ScoringEngine(config.scoring.weights, config)
+    if len(all_listings) > 100:
+        logger.info(f"Scoring {len(all_listings)} listings via Claude API — this may take a few minutes")
     for listing in all_listings:
         zip_stats = area_stats.get(listing.zip_code, AreaStats(area_key=listing.zip_code))
         listing.deal_score, listing.score_breakdown = scorer.score(listing, zip_stats)

@@ -1,16 +1,28 @@
 """
 Flask web application for Home Deal Finder.
 Provides a GUI for configuring searches, subscribing to newsletters,
-and viewing the interactive map.
+viewing the interactive map, and admin approval of search requests.
 """
 
 import json
 import logging
 import os
 import re
+from functools import wraps
 from pathlib import Path
 
-from flask import Flask, flash, redirect, render_template, request, send_file, url_for
+from flask import (
+    Flask,
+    abort,
+    flash,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    url_for,
+)
+
+from src.db import Database
 
 logger = logging.getLogger(__name__)
 
@@ -18,39 +30,39 @@ app = Flask(__name__, template_folder="templates")
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(32))
 
 DATA_DIR = Path("data")
-CONFIG_DIR = Path("config")
+DB_PATH = os.environ.get("DB_PATH", "data/listings.db")
 
 # Email validation pattern
 EMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
 # ZIP code validation
 ZIP_PATTERN = re.compile(r"^\d{5}$")
 
-
-def _load_subscribers() -> list[dict]:
-    """Load subscriber list from JSON file."""
-    path = DATA_DIR / "subscribers.json"
-    if path.exists():
-        with open(path) as f:
-            return json.load(f)
-    return []
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "")
 
 
-def _save_subscribers(subscribers: list[dict]):
-    """Save subscriber list to JSON file."""
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    with open(DATA_DIR / "subscribers.json", "w") as f:
-        json.dump(subscribers, f, indent=2)
+def _get_db() -> Database:
+    """Get a database connection."""
+    return Database(DB_PATH)
 
 
 def _sanitize_input(value: str, max_length: int = 200) -> str:
     """Sanitize user input to prevent injection."""
     if not isinstance(value, str):
         return ""
-    # Strip whitespace and null bytes
     value = value.strip().replace("\x00", "")
-    # Truncate
     value = value[:max_length]
     return value
+
+
+def admin_required(f):
+    """Decorator that checks for a valid admin token in the query string."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.args.get("token", "")
+        if not ADMIN_TOKEN or token != ADMIN_TOKEN:
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
 
 
 @app.route("/")
@@ -61,14 +73,12 @@ def index():
 
 @app.route("/subscribe", methods=["POST"])
 def subscribe():
-    """Handle newsletter subscription form."""
-    # Validate and sanitize all inputs
+    """Handle newsletter subscription — creates a pending search request."""
     email = _sanitize_input(request.form.get("email", ""), 254)
     if not EMAIL_PATTERN.match(email):
         flash("Please enter a valid email address.", "error")
         return redirect(url_for("index"))
 
-    # Build search preferences from form
     zip_codes_raw = _sanitize_input(request.form.get("zip_codes", ""), 500)
     zip_codes = [z.strip() for z in zip_codes_raw.split(",") if ZIP_PATTERN.match(z.strip())]
     if not zip_codes:
@@ -81,7 +91,6 @@ def subscribe():
     min_baths = request.form.get("min_baths", "0")
     min_sqft = request.form.get("min_sqft", "0")
 
-    # Validate numeric inputs
     try:
         min_price = max(0, int(min_price))
         max_price = max(0, int(max_price))
@@ -106,9 +115,7 @@ def subscribe():
     wants_pool = request.form.get("pool") == "on"
     wants_basement = request.form.get("basement") == "on"
 
-    subscriber = {
-        "email": email,
-        "zip_codes": zip_codes,
+    preferences = {
         "min_price": min_price,
         "max_price": max_price,
         "min_beds": min_beds,
@@ -120,18 +127,17 @@ def subscribe():
         "wants_basement": wants_basement,
     }
 
-    # Save subscriber
-    subscribers = _load_subscribers()
-    # Update existing or add new
-    existing = next((s for s in subscribers if s["email"] == email), None)
-    if existing:
-        existing.update(subscriber)
-        flash("Your preferences have been updated!", "success")
-    else:
-        subscribers.append(subscriber)
-        flash("You've been subscribed! You'll receive your first report on the 1st of next month.", "success")
+    db = _get_db()
+    try:
+        db.create_search_request(email, zip_codes, preferences)
+    finally:
+        db.close()
 
-    _save_subscribers(subscribers)
+    flash(
+        "Your search request has been submitted! "
+        "You'll receive an email once your request is approved.",
+        "success",
+    )
     return redirect(url_for("index"))
 
 
@@ -139,9 +145,20 @@ def subscribe():
 def unsubscribe():
     """Handle unsubscribe request."""
     email = _sanitize_input(request.form.get("email", ""), 254)
-    subscribers = _load_subscribers()
-    subscribers = [s for s in subscribers if s["email"] != email]
-    _save_subscribers(subscribers)
+    if not email:
+        flash("Please enter your email address.", "error")
+        return redirect(url_for("index"))
+
+    db = _get_db()
+    try:
+        # Mark any approved requests for this email as rejected (effectively unsubscribed)
+        approved = db.get_approved_subscribers()
+        for sub in approved:
+            if sub["email"] == email:
+                db.update_request_status(sub["id"], "rejected")
+    finally:
+        db.close()
+
     flash("You've been unsubscribed.", "success")
     return redirect(url_for("index"))
 
@@ -152,7 +169,7 @@ def live_map():
     map_path = DATA_DIR / "map.html"
     if map_path.exists():
         return send_file(map_path)
-    return render_template("no_map.html")
+    return "<h1>No map generated yet.</h1><p>Check back after the next scan.</p>", 404
 
 
 @app.route("/newsletter")
@@ -161,7 +178,65 @@ def latest_newsletter():
     newsletter_path = DATA_DIR / "latest_newsletter.html"
     if newsletter_path.exists():
         return send_file(newsletter_path)
-    return "<h1>No newsletter generated yet.</h1><p>Run the scanner first.</p>", 404
+    return "<h1>No newsletter generated yet.</h1><p>Check back after the next scan.</p>", 404
+
+
+# --- Admin routes ---
+
+
+@app.route("/admin/requests")
+@admin_required
+def admin_requests():
+    """Admin dashboard showing all search requests."""
+    db = _get_db()
+    try:
+        requests_list = db.get_all_requests()
+        # Parse JSON fields for display
+        for req in requests_list:
+            req["zip_codes"] = json.loads(req["zip_codes"])
+            req["preferences"] = json.loads(req["preferences"])
+    finally:
+        db.close()
+
+    return render_template(
+        "admin_requests.html",
+        requests=requests_list,
+        token=ADMIN_TOKEN,
+    )
+
+
+@app.route("/admin/approve/<request_id>", methods=["POST"])
+@admin_required
+def admin_approve(request_id):
+    """Approve a pending search request."""
+    db = _get_db()
+    try:
+        req = db.get_request(request_id)
+        if not req:
+            abort(404)
+        db.update_request_status(request_id, "approved")
+    finally:
+        db.close()
+
+    flash(f"Request from {req['email']} approved.", "success")
+    return redirect(url_for("admin_requests", token=ADMIN_TOKEN))
+
+
+@app.route("/admin/reject/<request_id>", methods=["POST"])
+@admin_required
+def admin_reject(request_id):
+    """Reject a pending search request."""
+    db = _get_db()
+    try:
+        req = db.get_request(request_id)
+        if not req:
+            abort(404)
+        db.update_request_status(request_id, "rejected")
+    finally:
+        db.close()
+
+    flash(f"Request from {req['email']} rejected.", "success")
+    return redirect(url_for("admin_requests", token=ADMIN_TOKEN))
 
 
 def create_app():

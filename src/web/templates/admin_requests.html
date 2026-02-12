@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin - Search Requests</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f7fafc; color: #2d3748; }
+  .navbar { background: #1a365d; color: white; padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; }
+  .navbar h1 { font-size: 22px; font-weight: 600; }
+  .navbar-links a { color: #bee3f8; text-decoration: none; margin-left: 24px; font-size: 14px; font-weight: 500; }
+  .navbar-links a:hover { color: white; }
+  .container { max-width: 960px; margin: 0 auto; padding: 32px; }
+  h2 { font-size: 24px; color: #1a365d; margin-bottom: 24px; }
+  .flash { padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; }
+  .flash-success { background: #f0fff4; color: #276749; border: 1px solid #c6f6d5; }
+  .flash-error { background: #fff5f5; color: #9b2c2c; border: 1px solid #fed7d7; }
+  .stats { display: flex; gap: 16px; margin-bottom: 24px; }
+  .stat-card { background: white; border-radius: 8px; padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); flex: 1; text-align: center; }
+  .stat-card .number { font-size: 28px; font-weight: 700; color: #1a365d; }
+  .stat-card .label { font-size: 12px; color: #a0aec0; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+  .request-card { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 16px; border-left: 4px solid #cbd5e0; }
+  .request-card.pending { border-left-color: #ecc94b; }
+  .request-card.approved { border-left-color: #48bb78; }
+  .request-card.rejected { border-left-color: #fc8181; }
+  .request-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .request-email { font-size: 16px; font-weight: 600; }
+  .request-status { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .status-pending { background: #fefcbf; color: #975a16; }
+  .status-approved { background: #c6f6d5; color: #276749; }
+  .status-rejected { background: #fed7d7; color: #9b2c2c; }
+  .request-details { font-size: 13px; color: #718096; line-height: 1.6; }
+  .request-details strong { color: #4a5568; }
+  .request-actions { margin-top: 12px; display: flex; gap: 8px; }
+  .btn { display: inline-block; padding: 8px 20px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; }
+  .btn-approve { background: #48bb78; color: white; }
+  .btn-approve:hover { background: #38a169; }
+  .btn-reject { background: #fc8181; color: white; }
+  .btn-reject:hover { background: #f56565; }
+  .empty { text-align: center; padding: 40px; color: #a0aec0; font-size: 16px; }
+  .timestamp { font-size: 12px; color: #a0aec0; }
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <h1>Admin Dashboard</h1>
+  <div class="navbar-links">
+    <a href="/">Site</a>
+    <a href="/map">Map</a>
+    <a href="/newsletter">Newsletter</a>
+  </div>
+</nav>
+
+<div class="container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="flash flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <h2>Search Requests</h2>
+
+  {% set pending = requests | selectattr('status', 'equalto', 'pending') | list %}
+  {% set approved = requests | selectattr('status', 'equalto', 'approved') | list %}
+  {% set rejected = requests | selectattr('status', 'equalto', 'rejected') | list %}
+
+  <div class="stats">
+    <div class="stat-card">
+      <div class="number">{{ pending | length }}</div>
+      <div class="label">Pending</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">{{ approved | length }}</div>
+      <div class="label">Approved</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">{{ rejected | length }}</div>
+      <div class="label">Rejected</div>
+    </div>
+  </div>
+
+  {% if not requests %}
+    <div class="empty">No search requests yet.</div>
+  {% endif %}
+
+  {% for req in requests %}
+    <div class="request-card {{ req.status }}">
+      <div class="request-header">
+        <span class="request-email">{{ req.email }}</span>
+        <span class="request-status status-{{ req.status }}">{{ req.status }}</span>
+      </div>
+      <div class="request-details">
+        <strong>ZIP Codes:</strong> {{ req.zip_codes | join(', ') }}<br>
+        <strong>Price:</strong> ${{ '{:,}'.format(req.preferences.min_price) }} &ndash; ${{ '{:,}'.format(req.preferences.max_price) }}<br>
+        <strong>Beds:</strong> {{ req.preferences.min_beds }}+ &nbsp;
+        <strong>Baths:</strong> {{ req.preferences.min_baths }}+ &nbsp;
+        <strong>Sqft:</strong> {{ req.preferences.min_sqft }}+<br>
+        <strong>Types:</strong> {{ req.preferences.property_types | join(', ') | replace('_', ' ') }}<br>
+        {% if req.preferences.wants_garage or req.preferences.wants_pool or req.preferences.wants_basement %}
+          <strong>Features:</strong>
+          {% if req.preferences.wants_garage %}Garage {% endif %}
+          {% if req.preferences.wants_pool %}Pool {% endif %}
+          {% if req.preferences.wants_basement %}Basement {% endif %}
+          <br>
+        {% endif %}
+        <span class="timestamp">Submitted: {{ req.created_at[:16] | replace('T', ' ') }}</span>
+        {% if req.reviewed_at %}
+          <span class="timestamp">&nbsp; Reviewed: {{ req.reviewed_at[:16] | replace('T', ' ') }}</span>
+        {% endif %}
+      </div>
+      {% if req.status == 'pending' %}
+        <div class="request-actions">
+          <form action="/admin/approve/{{ req.id }}?token={{ token }}" method="POST" style="display:inline">
+            <button type="submit" class="btn btn-approve">Approve</button>
+          </form>
+          <form action="/admin/reject/{{ req.id }}?token={{ token }}" method="POST" style="display:inline">
+            <button type="submit" class="btn btn-reject">Reject</button>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+  {% endfor %}
+</div>
+</body>
+</html>

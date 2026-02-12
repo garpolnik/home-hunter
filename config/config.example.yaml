@@ -57,23 +57,12 @@ enrichment:
       - name: "Office"
         address: "1600 Market St, Philadelphia, PA"
 
-# Deal scoring weights (should sum to ~1.0)
+# Deal scoring — powered by Claude AI
+# Set ANTHROPIC_API_KEY env var to enable AI scoring.
+# Without the key, all listings receive a default score of 50.
 scoring:
-  weights:
-    price_vs_estimate: 0.20
-    price_per_sqft: 0.12
-    days_on_market: 0.08
-    price_reductions: 0.08
-    lot_size_value: 0.05
-    hoa_cost: 0.05
-    tax_rate: 0.04
-    school_rating: 0.07
-    walk_score: 0.05
-    flood_risk: 0.06
-    commute_time: 0.06
-    property_age: 0.04
-    bed_bath_value: 0.05
-    features_bonus: 0.05
+  # Claude model to use for scoring (claude-haiku-4-5-20251001 recommended for cost efficiency)
+  claude_model: "claude-haiku-4-5-20251001"
   top_deal_threshold: 70
 
 # Newsletter
