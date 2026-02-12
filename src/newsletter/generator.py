@@ -117,20 +117,35 @@ class NewsletterGenerator:
         sections = []
 
         # Top Deals - highest scoring listings
+        # Use configured threshold, but if no listings meet it, fall back to
+        # showing the top listings regardless of threshold
         threshold = self.config.scoring.top_deal_threshold
         top_deals = sorted(
             [l for l in all_listings if l.deal_score is not None and l.deal_score >= threshold],
             key=lambda l: l.deal_score,
             reverse=True,
         )[:10]
+        if not top_deals:
+            # Fallback: show top 10 by score even if below threshold
+            top_deals = sorted(
+                [l for l in all_listings if l.deal_score is not None],
+                key=lambda l: l.deal_score,
+                reverse=True,
+            )[:10]
         sections.append(NewsletterSection(
             name="Top Deals",
             listings=[self._prepare_listing(l) for l in top_deals],
         ))
 
-        # New This Month
+        # New This Month - includes explicitly new listings plus any with is_new flag
+        combined_new = list(new_listings)
+        new_addresses = {l.address for l in combined_new}
+        for l in all_listings:
+            if l.is_new and l.address not in new_addresses:
+                combined_new.append(l)
+                new_addresses.add(l.address)
         new_sorted = sorted(
-            [l for l in new_listings if l.deal_score is not None],
+            [l for l in combined_new if l.deal_score is not None],
             key=lambda l: l.deal_score,
             reverse=True,
         )[:15]
@@ -172,12 +187,17 @@ class NewsletterGenerator:
             if l.deal_score is not None and l.deal_score >= self.config.scoring.top_deal_threshold
         )
 
+        # Count new listings: explicitly new + any with is_new flag
+        total_new = len(new_listings) + sum(
+            1 for l in all_listings if l.is_new and l not in new_listings
+        )
+
         template = self.env.get_template("newsletter.html")
         return template.render(
             sections=sections,
             area_stats=area_stats,
             run_date=datetime.now().strftime("%B %Y"),
-            total_new=len(new_listings),
+            total_new=total_new,
             total_tracked=len(all_listings),
             top_deal_count=top_deal_count,
             avg_score=avg_score,

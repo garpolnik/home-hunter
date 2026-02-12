@@ -175,6 +175,13 @@ class RealtorFetcher(BaseFetcher):
             raw_photo = photos[0].get("href", "") if isinstance(photos[0], dict) else ""
             photo_url = sanitize_url(str(raw_photo), "photo_url", allow_any_domain=True)
 
+        # Compute days_on_market from list_date if API didn't provide it
+        days_on_market = sanitize_numeric(
+            result.get("list_date_min_days_on_market"), "days_on_market", 0, 10_000
+        )
+        if days_on_market is None and list_date is not None:
+            days_on_market = (date.today() - list_date).days
+
         # Coordinates
         coord = location.get("coordinate", {}) or {}
 
@@ -210,9 +217,7 @@ class RealtorFetcher(BaseFetcher):
                 "hoa_monthly", 0, 50_000
             ),
             list_date=list_date,
-            days_on_market=sanitize_numeric(
-                result.get("list_date_min_days_on_market"), "days_on_market", 0, 10_000
-            ),
+            days_on_market=int(days_on_market) if days_on_market is not None else None,
             photo_url=photo_url,
             status="active",
             source_urls={"realtor": source_url},

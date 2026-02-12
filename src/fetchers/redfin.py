@@ -45,7 +45,16 @@ class RedfinFetcher(BaseFetcher):
         super().__init__(config)
         self._source_config = config.sources.redfin
         self.session.headers.update({
+            "Accept": "*/*",
+            "Accept-Encoding": "gzip, deflate, br",
             "Referer": "https://www.redfin.com/",
+            "Origin": "https://www.redfin.com",
+            "Sec-Ch-Ua": '"Chromium";v="131", "Not_A Brand";v="24"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-origin",
         })
 
     @property
