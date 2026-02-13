@@ -163,7 +163,7 @@ class ScoringEngine:
         try:
             response = self.client.messages.create(
                 model=self.model,
-                max_tokens=300,
+                max_tokens=1024,
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": prompt}],
             )
