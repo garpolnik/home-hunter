@@ -19,8 +19,8 @@ class EmailSender:
         self.smtp_user = os.environ.get("SMTP_USER", "")
         self.smtp_password = os.environ.get("SMTP_PASSWORD", "")
 
-    def send(self, html_content: str, new_count: int = 0) -> int:
-        """Send the newsletter to all configured recipients. Returns count of emails sent."""
+    def send(self, html_content: str, new_count: int = 0, db_recipients: list[str] | None = None) -> int:
+        """Send the newsletter to all configured + approved DB recipients. Returns count of emails sent."""
         if not self.smtp_user or not self.smtp_password:
             logger.warning("SMTP credentials not set. Skipping email send.")
             preview_path = "data/latest_newsletter.html"
@@ -29,9 +29,16 @@ class EmailSender:
             logger.info(f"Newsletter HTML saved to {preview_path} for preview")
             return 0
 
-        if not self.config.newsletter.recipients:
+        # Merge config recipients with approved DB subscribers, deduplicated
+        all_recipients = list(dict.fromkeys(
+            self.config.newsletter.recipients + (db_recipients or [])
+        ))
+
+        if not all_recipients:
             logger.warning("No recipients configured. Skipping email send.")
             return 0
+
+        logger.info(f"Sending newsletter to {len(all_recipients)} recipients")
 
         now = datetime.now()
         subject = self.config.newsletter.subject_template.format(
@@ -55,7 +62,7 @@ class EmailSender:
             return 0
 
         try:
-            for recipient in self.config.newsletter.recipients:
+            for recipient in all_recipients:
                 try:
                     msg = MIMEMultipart("alternative")
                     msg["Subject"] = subject

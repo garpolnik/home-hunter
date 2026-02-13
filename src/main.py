@@ -241,7 +241,11 @@ def run(config_path: str = "config/config.yaml"):
     html = generator.render(new_listings, all_listings, area_stats, market_report)
 
     sender = EmailSender(config)
-    emails_sent = sender.send(html, new_count=len(new_listings))
+    approved_subscribers = db.get_approved_subscribers()
+    db_emails = [sub["email"] for sub in approved_subscribers]
+    if db_emails:
+        logger.info(f"Including {len(db_emails)} approved subscriber(s) from database")
+    emails_sent = sender.send(html, new_count=len(new_listings), db_recipients=db_emails)
 
     # Log run
     db.log_run(
