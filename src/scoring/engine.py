@@ -169,6 +169,10 @@ class ScoringEngine:
             )
 
             text = response.content[0].text.strip()
+            # Strip markdown code fences if present
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+                text = text.rsplit("```", 1)[0].strip()
             result = json.loads(text)
 
             score = max(0, min(100, int(result["score"])))
@@ -182,7 +186,7 @@ class ScoringEngine:
             return float(score), breakdown
 
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse Claude response for {listing.address}: {e}")
+            logger.error(f"Failed to parse Claude response for {listing.address}: {e}\nRaw response: {text[:500]}")
             return 50.0, {"rationale": "Scoring error — could not parse response", "strengths": [], "weaknesses": []}
         except anthropic.APIError as e:
             logger.error(f"Claude API error scoring {listing.address}: {e}")
