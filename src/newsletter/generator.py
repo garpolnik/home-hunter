@@ -85,7 +85,8 @@ def _get_top_scores(listing: Listing, limit: int = 5) -> list[tuple[str, float]]
     """Get the top N scoring criteria for display."""
     if not listing.score_breakdown:
         return []
-    sorted_scores = sorted(listing.score_breakdown.items(), key=lambda x: x[1], reverse=True)
+    numeric_items = [(k, v) for k, v in listing.score_breakdown.items() if isinstance(v, (int, float))]
+    sorted_scores = sorted(numeric_items, key=lambda x: x[1], reverse=True)
     return [(CRITERIA_LABELS.get(name, name), value) for name, value in sorted_scores[:limit]]
 
 
