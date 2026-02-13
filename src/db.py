@@ -277,6 +277,10 @@ class Database:
                     listing.commute_minutes = existing_listing.commute_minutes
                 if listing.school_rating is None and existing_listing.school_rating is not None:
                     listing.school_rating = existing_listing.school_rating
+                # Preserve AI deal score if price hasn't changed
+                if existing_listing.deal_score is not None and listing.price == existing_listing.price:
+                    listing.deal_score = existing_listing.deal_score
+                    listing.score_breakdown = existing_listing.score_breakdown
                 updated_listings.append(listing)
 
         return new_listings, updated_listings

@@ -211,14 +211,18 @@ def run(config_path: str = "config/config.yaml"):
     else:
         logger.info("Dynamic listing age filter disabled")
 
-    # Phase 5: Score all remaining listings
+    # Phase 5: Score listings that need it (skip already-scored unchanged listings)
     logger.info("--- Phase 5: Scoring ---")
     all_listings = new_listings + updated_listings
+    needs_scoring = [l for l in all_listings if l.deal_score is None]
+    already_scored = len(all_listings) - len(needs_scoring)
+    if already_scored:
+        logger.info(f"Skipping {already_scored} already-scored listings (price unchanged)")
 
     scorer = ScoringEngine(config.scoring.weights, config)
-    if len(all_listings) > 100:
-        logger.info(f"Scoring {len(all_listings)} listings via Claude API — this may take a few minutes")
-    for listing in all_listings:
+    if len(needs_scoring) > 100:
+        logger.info(f"Scoring {len(needs_scoring)} listings via Claude API — this may take a few minutes")
+    for listing in needs_scoring:
         zip_stats = area_stats.get(listing.zip_code, AreaStats(area_key=listing.zip_code))
         listing.deal_score, listing.score_breakdown = scorer.score(listing, zip_stats)
 
