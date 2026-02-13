@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__, template_folder="templates")
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(32))
 
-DATA_DIR = Path("data")
+DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 DB_PATH = os.environ.get("DB_PATH", "data/listings.db")
 
 # Email validation pattern
