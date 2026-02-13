@@ -40,8 +40,11 @@ Use your judgment to weigh these factors contextually. For example, a property \
 priced 10% below estimate with price reductions and high DOM is a stronger \
 deal signal than any single factor alone.
 
+IMPORTANT: Be concise. Keep the total JSON response under 500 characters.
+Rationale: 1-2 short sentences. Strengths/weaknesses: 2-3 items each, max 8 words per item.
+
 You MUST respond with ONLY valid JSON in this exact format:
-{"score": <integer 0-100>, "rationale": "<2-3 sentence explanation>", "strengths": ["<strength1>", ...], "weaknesses": ["<weakness1>", ...]}
+{"score": <integer 0-100>, "rationale": "<1-2 sentences>", "strengths": ["<short phrase>", ...], "weaknesses": ["<short phrase>", ...]}
 
 Do not include any text outside the JSON object.\
 """
@@ -163,7 +166,7 @@ class ScoringEngine:
         try:
             response = self.client.messages.create(
                 model=self.model,
-                max_tokens=1024,
+                max_tokens=512,
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": prompt}],
             )
