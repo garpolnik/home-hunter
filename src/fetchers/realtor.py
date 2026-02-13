@@ -187,6 +187,14 @@ class RealtorFetcher(BaseFetcher):
         if not coord.get("lat"):
             coord = address_data.get("coordinate", {}) or {}
 
+        # Status - filter out pending/contingent listings
+        raw_status = str(result.get("status", "for_sale")).lower()
+        flags = result.get("flags", {}) or {}
+        is_pending = flags.get("is_pending") or flags.get("is_contingent")
+        if is_pending or raw_status in ("pending", "contingent", "sold"):
+            return None
+        status = "active" if raw_status == "for_sale" else raw_status
+
         # Source URL
         permalink = sanitize_string(str(result.get("permalink", "")), "source_id")
         raw_url = f"https://www.realtor.com/realestateandhomes-detail/{permalink}" if permalink else ""
@@ -221,7 +229,7 @@ class RealtorFetcher(BaseFetcher):
             list_date=list_date,
             days_on_market=int(days_on_market) if days_on_market is not None else None,
             photo_url=photo_url,
-            status="active",
+            status=status,
             source_urls={"realtor": source_url},
         )
 
