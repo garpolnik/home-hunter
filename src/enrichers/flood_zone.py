@@ -20,7 +20,7 @@ MINIMAL_RISK_ZONES = {"C", "X", "X-UNSHADED", "X UNSHADED"}
 
 class FloodZoneEnricher:
     # FEMA National Flood Hazard Layer (NFHL) ArcGIS REST API
-    API_URL = "https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/28/query"
+    API_URL = "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query"
 
     def __init__(self, config: AppConfig):
         self.config = config
