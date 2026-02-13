@@ -69,7 +69,7 @@ scoring:
 newsletter:
   recipients:
     - "you@example.com"
-  from_email: "deals@yourdomain.com"
+  from_email: "deals@yourdomain.com"    # Must match SMTP_USER in .env
   from_name: "Home Deal Finder"
   subject_template: "Home Deal Finder: {new_count} New Listings - {month} {year}"
   max_listings_in_email: 30
