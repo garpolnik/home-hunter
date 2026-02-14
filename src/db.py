@@ -109,8 +109,10 @@ CREATE TABLE IF NOT EXISTS user_runs (
 """
 
 # Columns to add to search_requests if migrating from an older schema
+# Note: SQLite ALTER TABLE cannot add UNIQUE columns, so we add a plain column
+# and create a unique index separately.
 _SEARCH_REQUESTS_MIGRATIONS = [
-    ("access_token", "TEXT UNIQUE"),
+    ("access_token", "TEXT"),
     ("map_path", "TEXT"),
     ("newsletter_path", "TEXT"),
     ("last_run_at", "TEXT"),
@@ -141,6 +143,11 @@ class Database:
                 self.conn.execute(
                     f"ALTER TABLE search_requests ADD COLUMN {col_name} {col_type}"
                 )
+        # Ensure unique index on access_token (safe to run repeatedly)
+        self.conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_search_requests_access_token "
+            "ON search_requests(access_token)"
+        )
         self.conn.commit()
 
     def close(self):
