@@ -73,7 +73,12 @@ def get_user_listings(db: Database, user_request: dict) -> list:
     placeholders = ",".join("?" * len(zip_codes))
     params = list(zip_codes)
 
-    conditions = [f"zip_code IN ({placeholders})", "status = 'active'"]
+    conditions = [
+        f"zip_code IN ({placeholders})",
+        "status = 'active'",
+        "(days_on_market IS NULL OR days_on_market < 60)",
+        "(deal_score IS NOT NULL AND deal_score >= 50)",
+    ]
 
     min_price = prefs.get("min_price", 0)
     max_price = prefs.get("max_price", 999999999)
