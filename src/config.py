@@ -31,6 +31,9 @@ class FilterConfig:
     max_dom_multiplier: float = 4.0
     # Absolute cap in days - never show listings older than this regardless of market
     max_dom_absolute: int = 365
+    # Display filters: control which listings appear on user maps/newsletters
+    max_dom_display: int = 60
+    min_deal_score_display: float = 50.0
 
 
 @dataclass
@@ -185,6 +188,8 @@ def load_config(path: str | Path = "config/config.yaml") -> AppConfig:
                 exclude_hoa_over=f.get("exclude_hoa_over"),
                 max_dom_multiplier=f.get("max_dom_multiplier", 4.0),
                 max_dom_absolute=f.get("max_dom_absolute", 365),
+                max_dom_display=f.get("max_dom_display", 60),
+                min_deal_score_display=f.get("min_deal_score_display", 50.0),
             )
 
     # Sources

@@ -61,14 +61,18 @@ def build_user_config(base_config: AppConfig, user_request: dict) -> AppConfig:
     return config
 
 
-def get_user_listings(db: Database, user_request: dict) -> list:
+def get_user_listings(db: Database, user_request: dict, config: AppConfig | None = None) -> list:
     """Query the shared listings DB for listings matching a user's criteria.
 
     Filters already-fetched, enriched, scored listings by the user's
     ZIP codes, price range, beds, baths, sqft, and property types.
+    Uses max_dom_display and min_deal_score_display from config for display filters.
     """
     zip_codes = json.loads(user_request["zip_codes"]) if isinstance(user_request["zip_codes"], str) else user_request["zip_codes"]
     prefs = json.loads(user_request["preferences"]) if isinstance(user_request["preferences"], str) else user_request["preferences"]
+
+    max_dom = config.search.filters.max_dom_display if config else 60
+    min_score = config.search.filters.min_deal_score_display if config else 50.0
 
     placeholders = ",".join("?" * len(zip_codes))
     params = list(zip_codes)
@@ -76,9 +80,10 @@ def get_user_listings(db: Database, user_request: dict) -> list:
     conditions = [
         f"zip_code IN ({placeholders})",
         "status = 'active'",
-        "(days_on_market IS NULL OR days_on_market < 60)",
-        "(deal_score IS NOT NULL AND deal_score >= 50)",
+        "(days_on_market IS NULL OR days_on_market < ?)",
+        "(deal_score IS NOT NULL AND deal_score >= ?)",
     ]
+    params.extend([max_dom, min_score])
 
     min_price = prefs.get("min_price", 0)
     max_price = prefs.get("max_price", 999999999)
@@ -183,7 +188,7 @@ def run_for_user(
                 db.upsert_listings(needs_scoring)
 
     # Query DB for all listings matching user criteria
-    all_user_listings = get_user_listings(db, user_request)
+    all_user_listings = get_user_listings(db, user_request, user_config)
     new_user_listings = [l for l in all_user_listings if l.is_new]
 
     access_token = user_request.get("access_token") or request_id
