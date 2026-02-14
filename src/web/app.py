@@ -383,7 +383,11 @@ def admin_rerun(request_id):
     thread = threading.Thread(target=_run_pipeline, daemon=True)
     thread.start()
 
-    flash(f"Pipeline re-run started for {req['email']}.", "success")
+    flash(
+        f"Pipeline re-run started for {req['email']}. "
+        f"Private URL: https://homehunter.casa/u/{access_token}",
+        "success",
+    )
     return redirect(url_for("admin_requests", token=ADMIN_TOKEN))
 
 
