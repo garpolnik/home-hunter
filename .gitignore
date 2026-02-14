@@ -25,5 +25,9 @@ config/config.yaml
 .DS_Store
 Thumbs.db
 
-# Data (DB is committed by CI, but ignore local temp files)
-data/*.tmp
+# Data (generated at runtime)
+data/
+!data/.gitkeep
+
+# Claude Code local settings
+.claude/
