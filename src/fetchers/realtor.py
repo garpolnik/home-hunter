@@ -195,9 +195,11 @@ class RealtorFetcher(BaseFetcher):
             return None
         status = "active" if raw_status == "for_sale" else raw_status
 
-        # Source URL
-        permalink = sanitize_string(str(result.get("permalink", "")), "source_id")
-        raw_url = f"https://www.realtor.com/realestateandhomes-detail/{permalink}" if permalink else ""
+        # Source URL - prefer the full href provided by the API, fall back to permalink
+        raw_url = str(result.get("href", "")) or ""
+        if not raw_url:
+            permalink = sanitize_string(str(result.get("permalink", "")), "source_id")
+            raw_url = f"https://www.realtor.com/realestateandhomes-detail/{permalink}" if permalink else ""
         source_url = sanitize_url(raw_url, "source_url")
 
         listing = Listing(
