@@ -492,6 +492,20 @@ class Database:
         )
         self.conn.commit()
 
+    def get_user_runs(self, limit: int = 50) -> list[dict]:
+        """Return recent user pipeline runs with associated email addresses."""
+        cursor = self.conn.execute(
+            """SELECT ur.id, ur.run_date, ur.listings_matched, ur.new_listings,
+                      ur.email_sent, ur.errors, ur.duration_seconds,
+                      sr.email, sr.access_token
+               FROM user_runs ur
+               JOIN search_requests sr ON ur.request_id = sr.id
+               ORDER BY ur.run_date DESC
+               LIMIT ?""",
+            (limit,),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
     def log_user_run(self, request_id: str, summary: dict):
         """Log a per-user pipeline run."""
         self.conn.execute(

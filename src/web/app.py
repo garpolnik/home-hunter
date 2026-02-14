@@ -337,6 +337,19 @@ def admin_reject(request_id):
     return redirect(url_for("admin_requests", token=ADMIN_TOKEN))
 
 
+@app.route("/admin/runs")
+@admin_required
+def admin_runs():
+    """Admin page showing recent per-user pipeline run history."""
+    db = _get_db()
+    try:
+        runs = db.get_user_runs(limit=50)
+    finally:
+        db.close()
+
+    return render_template("admin_runs.html", runs=runs, token=ADMIN_TOKEN)
+
+
 @app.route("/admin/rerun/<request_id>", methods=["POST"])
 @admin_required
 def admin_rerun(request_id):
