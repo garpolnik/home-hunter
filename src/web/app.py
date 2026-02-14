@@ -359,11 +359,14 @@ def admin_rerun(request_id):
         req = db.get_request(request_id)
         if not req or req["status"] != "approved":
             abort(404)
+        # Generate access token if user doesn't have one yet
+        access_token = req.get("access_token", "")
+        if not access_token:
+            access_token = db.set_access_token(request_id)
+            req["access_token"] = access_token
         db.update_user_run_status(request_id, "running")
     finally:
         db.close()
-
-    access_token = req.get("access_token", "")
 
     def _run_pipeline():
         with _pipeline_semaphore:
