@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your Dashboard - Home Deal Finder</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f7fafc; color: #2d3748; }
+  .navbar { background: #1a365d; color: white; padding: 16px 32px; }
+  .navbar h1 { font-size: 22px; font-weight: 600; }
+  .container { max-width: 800px; margin: 0 auto; padding: 32px; }
+  .card { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 32px; margin-bottom: 24px; }
+  .card h2 { font-size: 20px; color: #1a365d; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #e2e8f0; }
+  .links { display: flex; gap: 16px; margin-bottom: 24px; }
+  .link-card { flex: 1; display: block; text-align: center; padding: 24px 16px; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-decoration: none; transition: all 0.2s; }
+  .link-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateY(-2px); }
+  .link-card .icon { font-size: 36px; margin-bottom: 8px; }
+  .link-card .label { font-size: 16px; font-weight: 600; color: #1a365d; }
+  .link-card .desc { font-size: 13px; color: #718096; margin-top: 4px; }
+  .criteria { font-size: 14px; color: #4a5568; line-height: 1.8; }
+  .criteria strong { color: #2d3748; }
+  .status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .status-running { background: #fefcbf; color: #975a16; }
+  .status-completed { background: #c6f6d5; color: #276749; }
+  .status-failed { background: #fed7d7; color: #9b2c2c; }
+  .meta { font-size: 12px; color: #a0aec0; margin-top: 16px; }
+  .footer { text-align: center; padding: 24px; color: #a0aec0; font-size: 12px; }
+
+  @media (max-width: 600px) {
+    .links { flex-direction: column; }
+    .container { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <h1>Home Deal Finder</h1>
+</nav>
+
+<div class="container">
+  <div class="links">
+    <a href="/u/{{ token }}/map" class="link-card">
+      <div class="icon">&#x1f5fa;</div>
+      <div class="label">Your Map</div>
+      <div class="desc">Interactive map of listings matching your criteria</div>
+    </a>
+    <a href="/u/{{ token }}/newsletter" class="link-card">
+      <div class="icon">&#x1f4e8;</div>
+      <div class="label">Your Newsletter</div>
+      <div class="desc">Latest deal report with scores and market analysis</div>
+    </a>
+  </div>
+
+  <div class="card">
+    <h2>Your Search Criteria</h2>
+    <div class="criteria">
+      <strong>ZIP Codes:</strong> {{ req.zip_codes | join(', ') }}<br>
+      <strong>Price Range:</strong> ${{ '{:,}'.format(req.preferences.min_price) }} &ndash; ${{ '{:,}'.format(req.preferences.max_price) }}<br>
+      <strong>Bedrooms:</strong> {{ req.preferences.min_beds }}+ &nbsp;
+      <strong>Bathrooms:</strong> {{ req.preferences.min_baths }}+ &nbsp;
+      <strong>Sqft:</strong> {{ req.preferences.min_sqft }}+<br>
+      <strong>Property Types:</strong> {{ req.preferences.property_types | join(', ') | replace('_', ' ') }}<br>
+      {% if req.preferences.wants_garage or req.preferences.wants_pool or req.preferences.wants_basement %}
+        <strong>Desired Features:</strong>
+        {% if req.preferences.wants_garage %}Garage {% endif %}
+        {% if req.preferences.wants_pool %}Pool {% endif %}
+        {% if req.preferences.wants_basement %}Basement {% endif %}
+      {% endif %}
+    </div>
+
+    {% if req.run_status %}
+    <div style="margin-top: 16px;">
+      <strong>Status:</strong>
+      <span class="status-badge status-{{ req.run_status }}">{{ req.run_status }}</span>
+    </div>
+    {% endif %}
+
+    {% if req.last_run_at %}
+    <div class="meta">
+      Last updated: {{ req.last_run_at[:16] | replace('T', ' ') }}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="footer">
+  <p>Home Deal Finder &mdash; This is your private dashboard. Bookmark this page for future access.</p>
+  <p>Data sourced from public real estate listings. Scores are estimates, not financial advice.</p>
+</div>
+</body>
+</html>

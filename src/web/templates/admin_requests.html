@@ -30,14 +30,23 @@
   .status-pending { background: #fefcbf; color: #975a16; }
   .status-approved { background: #c6f6d5; color: #276749; }
   .status-rejected { background: #fed7d7; color: #9b2c2c; }
+  .run-status { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.5px; margin-left: 8px; }
+  .run-running { background: #fefcbf; color: #975a16; }
+  .run-completed { background: #c6f6d5; color: #276749; }
+  .run-failed { background: #fed7d7; color: #9b2c2c; }
   .request-details { font-size: 13px; color: #718096; line-height: 1.6; }
   .request-details strong { color: #4a5568; }
+  .private-url { display: block; margin-top: 8px; padding: 8px 12px; background: #edf2f7; border-radius: 4px; font-size: 12px; word-break: break-all; }
+  .private-url a { color: #3182ce; text-decoration: none; }
+  .private-url a:hover { text-decoration: underline; }
   .request-actions { margin-top: 12px; display: flex; gap: 8px; }
   .btn { display: inline-block; padding: 8px 20px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; }
   .btn-approve { background: #48bb78; color: white; }
   .btn-approve:hover { background: #38a169; }
   .btn-reject { background: #fc8181; color: white; }
   .btn-reject:hover { background: #f56565; }
+  .btn-rerun { background: #3182ce; color: white; }
+  .btn-rerun:hover { background: #2b6cb0; }
   .empty { text-align: center; padding: 40px; color: #a0aec0; font-size: 16px; }
   .timestamp { font-size: 12px; color: #a0aec0; }
 </style>
@@ -88,7 +97,12 @@
     <div class="request-card {{ req.status }}">
       <div class="request-header">
         <span class="request-email">{{ req.email }}</span>
-        <span class="request-status status-{{ req.status }}">{{ req.status }}</span>
+        <div>
+          <span class="request-status status-{{ req.status }}">{{ req.status }}</span>
+          {% if req.run_status %}
+            <span class="run-status run-{{ req.run_status }}">{{ req.run_status }}</span>
+          {% endif %}
+        </div>
       </div>
       <div class="request-details">
         <strong>ZIP Codes:</strong> {{ req.zip_codes | join(', ') }}<br>
@@ -108,17 +122,32 @@
         {% if req.reviewed_at %}
           <span class="timestamp">&nbsp; Reviewed: {{ req.reviewed_at[:16] | replace('T', ' ') }}</span>
         {% endif %}
+        {% if req.last_run_at %}
+          <span class="timestamp">&nbsp; Last run: {{ req.last_run_at[:16] | replace('T', ' ') }}</span>
+        {% endif %}
+
+        {% if req.access_token %}
+          <div class="private-url">
+            <a href="https://homehunter.casa/u/{{ req.access_token }}" target="_blank">
+              https://homehunter.casa/u/{{ req.access_token }}
+            </a>
+          </div>
+        {% endif %}
       </div>
-      {% if req.status == 'pending' %}
-        <div class="request-actions">
+      <div class="request-actions">
+        {% if req.status == 'pending' %}
           <form action="/admin/approve/{{ req.id }}?token={{ token }}" method="POST" style="display:inline">
             <button type="submit" class="btn btn-approve">Approve</button>
           </form>
           <form action="/admin/reject/{{ req.id }}?token={{ token }}" method="POST" style="display:inline">
             <button type="submit" class="btn btn-reject">Reject</button>
           </form>
-        </div>
-      {% endif %}
+        {% elif req.status == 'approved' %}
+          <form action="/admin/rerun/{{ req.id }}?token={{ token }}" method="POST" style="display:inline">
+            <button type="submit" class="btn btn-rerun">Re-run Pipeline</button>
+          </form>
+        {% endif %}
+      </div>
     </div>
   {% endfor %}
 </div>

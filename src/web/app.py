@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import threading
 from functools import wraps
 from pathlib import Path
 
@@ -38,6 +39,9 @@ EMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
 ZIP_PATTERN = re.compile(r"^\d{5}$")
 
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "")
+
+# Limit concurrent background pipeline runs
+_pipeline_semaphore = threading.Semaphore(2)
 
 
 def _get_db() -> Database:
@@ -181,6 +185,66 @@ def latest_newsletter():
     return "<h1>No newsletter generated yet.</h1><p>Check back after the next scan.</p>", 404
 
 
+# --- Per-user private routes ---
+
+
+@app.route("/u/<token>")
+def user_dashboard(token):
+    """User's personal dashboard with links to their map and newsletter."""
+    db = _get_db()
+    try:
+        req = db.get_request_by_token(token)
+    finally:
+        db.close()
+
+    if not req:
+        abort(404)
+
+    # Parse JSON fields for display
+    req["zip_codes"] = json.loads(req["zip_codes"]) if isinstance(req["zip_codes"], str) else req["zip_codes"]
+    req["preferences"] = json.loads(req["preferences"]) if isinstance(req["preferences"], str) else req["preferences"]
+
+    return render_template("user_dashboard.html", req=req, token=token)
+
+
+@app.route("/u/<token>/map")
+def user_map(token):
+    """Serve a user's personalized map via their private token."""
+    db = _get_db()
+    try:
+        req = db.get_request_by_token(token)
+    finally:
+        db.close()
+
+    if not req:
+        abort(404)
+
+    map_path = req.get("map_path")
+    if map_path and Path(map_path).exists():
+        return send_file(Path(map_path).resolve())
+
+    return render_template("no_map.html"), 202
+
+
+@app.route("/u/<token>/newsletter")
+def user_newsletter(token):
+    """Serve a user's personalized newsletter."""
+    db = _get_db()
+    try:
+        req = db.get_request_by_token(token)
+    finally:
+        db.close()
+
+    if not req:
+        abort(404)
+
+    newsletter_path = req.get("newsletter_path")
+    if newsletter_path and Path(newsletter_path).exists():
+        return send_file(Path(newsletter_path).resolve())
+
+    return "<h1>Your newsletter is being generated.</h1><p>Check back in a few minutes.</p>", 202
+
+
 # --- Admin routes ---
 
 
@@ -208,17 +272,51 @@ def admin_requests():
 @app.route("/admin/approve/<request_id>", methods=["POST"])
 @admin_required
 def admin_approve(request_id):
-    """Approve a pending search request."""
+    """Approve a search request, generate access token, trigger pipeline in background."""
     db = _get_db()
     try:
         req = db.get_request(request_id)
         if not req:
             abort(404)
         db.update_request_status(request_id, "approved")
+        access_token = db.set_access_token(request_id)
+        db.update_user_run_status(request_id, "running")
+        # Re-fetch with token
+        req = db.get_request(request_id)
     finally:
         db.close()
 
-    flash(f"Request from {req['email']} approved.", "success")
+    # Trigger pipeline in background thread
+    def _run_pipeline():
+        with _pipeline_semaphore:
+            from src.config import load_config
+            from src.user_pipeline import run_for_user
+
+            pipeline_db = Database(DB_PATH)
+            try:
+                config = load_config()
+                # Send welcome email first
+                from src.newsletter.sendgrid_sender import SendGridSender
+
+                sender = SendGridSender(config)
+                dashboard_url = f"https://homehunter.casa/u/{access_token}"
+                sender.send_welcome(req["email"], dashboard_url)
+
+                run_for_user(req, config, pipeline_db, fetch_new=True, send_email=True)
+            except Exception:
+                logger.exception(f"Background pipeline failed for {req['email']}")
+                pipeline_db.update_user_run_status(request_id, "failed")
+            finally:
+                pipeline_db.close()
+
+    thread = threading.Thread(target=_run_pipeline, daemon=True)
+    thread.start()
+
+    flash(
+        f"Request from {req['email']} approved. Pipeline running in background. "
+        f"Private URL: https://homehunter.casa/u/{access_token}",
+        "success",
+    )
     return redirect(url_for("admin_requests", token=ADMIN_TOKEN))
 
 
@@ -236,6 +334,43 @@ def admin_reject(request_id):
         db.close()
 
     flash(f"Request from {req['email']} rejected.", "success")
+    return redirect(url_for("admin_requests", token=ADMIN_TOKEN))
+
+
+@app.route("/admin/rerun/<request_id>", methods=["POST"])
+@admin_required
+def admin_rerun(request_id):
+    """Re-run the pipeline for an approved user."""
+    db = _get_db()
+    try:
+        req = db.get_request(request_id)
+        if not req or req["status"] != "approved":
+            abort(404)
+        db.update_user_run_status(request_id, "running")
+    finally:
+        db.close()
+
+    access_token = req.get("access_token", "")
+
+    def _run_pipeline():
+        with _pipeline_semaphore:
+            from src.config import load_config
+            from src.user_pipeline import run_for_user
+
+            pipeline_db = Database(DB_PATH)
+            try:
+                config = load_config()
+                run_for_user(req, config, pipeline_db, fetch_new=True, send_email=True)
+            except Exception:
+                logger.exception(f"Re-run pipeline failed for {req['email']}")
+                pipeline_db.update_user_run_status(request_id, "failed")
+            finally:
+                pipeline_db.close()
+
+    thread = threading.Thread(target=_run_pipeline, daemon=True)
+    thread.start()
+
+    flash(f"Pipeline re-run started for {req['email']}.", "success")
     return redirect(url_for("admin_requests", token=ADMIN_TOKEN))
 
 

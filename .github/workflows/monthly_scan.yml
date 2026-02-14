@@ -12,7 +12,7 @@ permissions:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
@@ -27,18 +27,19 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run home deal finder
+      - name: Run home deal finder (all approved users)
         env:
           RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
           WALKSCORE_API_KEY: ${{ secrets.WALKSCORE_API_KEY }}
           SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
-        run: python -m src
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python -c "from src.user_pipeline import run_all_approved_users; run_all_approved_users()"
 
       - name: Commit updated database
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/listings.db data/latest_newsletter.html data/map.html
+          git add data/
           git diff --cached --quiet || git commit -m "Update listings database [$(date +%Y-%m-%d)]"
           git push

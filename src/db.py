@@ -1,4 +1,5 @@
 import json
+import secrets
 import sqlite3
 import statistics
 import uuid
@@ -87,9 +88,34 @@ CREATE TABLE IF NOT EXISTS search_requests (
     preferences TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending',
     created_at TEXT NOT NULL,
-    reviewed_at TEXT
+    reviewed_at TEXT,
+    access_token TEXT UNIQUE,
+    map_path TEXT,
+    newsletter_path TEXT,
+    last_run_at TEXT,
+    run_status TEXT
+);
+
+CREATE TABLE IF NOT EXISTS user_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id TEXT NOT NULL REFERENCES search_requests(id),
+    run_date TEXT NOT NULL,
+    listings_matched INTEGER DEFAULT 0,
+    new_listings INTEGER DEFAULT 0,
+    email_sent BOOLEAN DEFAULT 0,
+    errors TEXT DEFAULT '',
+    duration_seconds REAL DEFAULT 0
 );
 """
+
+# Columns to add to search_requests if migrating from an older schema
+_SEARCH_REQUESTS_MIGRATIONS = [
+    ("access_token", "TEXT UNIQUE"),
+    ("map_path", "TEXT"),
+    ("newsletter_path", "TEXT"),
+    ("last_run_at", "TEXT"),
+    ("run_status", "TEXT"),
+]
 
 
 class Database:
@@ -98,10 +124,23 @@ class Database:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(str(self.db_path))
         self.conn.row_factory = sqlite3.Row
+        self.conn.execute("PRAGMA journal_mode=WAL")
         self._init_schema()
 
     def _init_schema(self):
         self.conn.executescript(SCHEMA)
+        self.conn.commit()
+        self._migrate_search_requests()
+
+    def _migrate_search_requests(self):
+        """Add new columns to search_requests if they don't exist (safe for existing DBs)."""
+        cursor = self.conn.execute("PRAGMA table_info(search_requests)")
+        existing_cols = {row["name"] for row in cursor.fetchall()}
+        for col_name, col_type in _SEARCH_REQUESTS_MIGRATIONS:
+            if col_name not in existing_cols:
+                self.conn.execute(
+                    f"ALTER TABLE search_requests ADD COLUMN {col_name} {col_type}"
+                )
         self.conn.commit()
 
     def close(self):
@@ -396,5 +435,70 @@ class Database:
         self.conn.execute(
             "INSERT INTO run_log (run_date, listings_fetched, new_listings, emails_sent, errors) VALUES (?, ?, ?, ?, ?)",
             (datetime.now().isoformat(), listings_fetched, new_listings, emails_sent, errors),
+        )
+        self.conn.commit()
+
+    # --- Per-user pipeline support ---
+
+    def set_access_token(self, request_id: str) -> str:
+        """Generate and store a unique access token for a user. Returns the token."""
+        token = secrets.token_hex(16)
+        self.conn.execute(
+            "UPDATE search_requests SET access_token = ? WHERE id = ?",
+            (token, request_id),
+        )
+        self.conn.commit()
+        return token
+
+    def get_request_by_token(self, token: str) -> dict | None:
+        """Look up an approved search request by its access token."""
+        cursor = self.conn.execute(
+            "SELECT * FROM search_requests WHERE access_token = ? AND status = 'approved'",
+            (token,),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    def update_user_output(self, request_id: str, map_path: str | None = None, newsletter_path: str | None = None):
+        """Update the generated output file paths for a user."""
+        updates = []
+        params = []
+        if map_path is not None:
+            updates.append("map_path = ?")
+            params.append(map_path)
+        if newsletter_path is not None:
+            updates.append("newsletter_path = ?")
+            params.append(newsletter_path)
+        if updates:
+            params.append(request_id)
+            self.conn.execute(
+                f"UPDATE search_requests SET {', '.join(updates)} WHERE id = ?",
+                params,
+            )
+            self.conn.commit()
+
+    def update_user_run_status(self, request_id: str, status: str):
+        """Update the run status for a user (running/completed/failed)."""
+        self.conn.execute(
+            "UPDATE search_requests SET run_status = ?, last_run_at = ? WHERE id = ?",
+            (status, datetime.now().isoformat(), request_id),
+        )
+        self.conn.commit()
+
+    def log_user_run(self, request_id: str, summary: dict):
+        """Log a per-user pipeline run."""
+        self.conn.execute(
+            """INSERT INTO user_runs (request_id, run_date, listings_matched, new_listings,
+               email_sent, errors, duration_seconds)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                request_id,
+                datetime.now().isoformat(),
+                summary.get("listings_matched", 0),
+                summary.get("new_listings", 0),
+                summary.get("email_sent", False),
+                summary.get("errors", ""),
+                summary.get("duration_seconds", 0),
+            ),
         )
         self.conn.commit()
